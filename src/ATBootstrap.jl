@@ -11,7 +11,7 @@ using LinearAlgebra
 #     trawl_locations
 # end
 
-
+const zdist_candidates = [Gamma, InverseGamma, InverseGaussian, LogNormal]
 
 function define_conditional_sim(acoustics, maxlag=200.0)
     geonasc = acoustics[!, [:nasc, :x, :y]]
@@ -78,6 +78,10 @@ function nonneg_lusim(params, zdists)
     return x
 end
 
+function nonneg_lusim(atbp)
+    return nonneg_lusim(atbp.params, atbp.zdists)
+end
+
 
 function compare_distributions(distributions, nasc, lungs_params; nreplicates=500, verbose=false)
     bin_edges = [0; 2 .^ (0:14)]
@@ -115,7 +119,7 @@ end
 predict_ts(L) = -66 + 20log10(L)
 predict_ts_stochastic(L) = -66 + 0.14randn() + 20log10(L) # standard error from Nate's paper (email on 2023-01-31)
 predict_weight(L) = 1e-5 * L^2.9
-predict_weight_stochastic(L) = predict_weight(L) + 
+predict_weight_stochastic(L) = predict_weight(L) * (1 + 0.05 * randn())
 
 
 # Numbers from Matta and Kimura 2012, Age determination manual
@@ -195,6 +199,73 @@ function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
     end
     # return age_comp
     return DataFrames.unstack(age_comp, :age, :p_age)
+end
+
+function ATSurveyData(acoustics, scaling, trawl_locations)
+    return (;acoustics, scaling, trawl_locations)
+end
+
+function ATBootstrapProblem(surveydata, class, cal_error, dA;
+        nreplicates=500, zdist_candidates=zdist_candidates)
+    println(class)
+    acoustics_sub = @subset(acoustics, :class .== class)
+    variogram, problem = define_conditional_sim(acoustics_sub)
+    params = get_lungs_params(problem, variogram.model)
+    optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
+    zdists = get_zdists(optimal_dist, params)
+    return (;class, variogram, problem, params, optimal_dist, zdists,
+        cal_error, dA, nreplicates)
+end
+
+function solution_domain(atbp, variable=:nasc)
+    sol = solve(atbp.problem, LUGS(variable => (variogram = atbp.variogram.model,)))
+    return domain(sol)
+end
+
+function simulate(atbp, surveydata)
+    acoustics, scaling, trawl_locations, scaling_classes = surveydata
+    class, variogram, problem, params, optimal_dist, zdists, cal_error, dA, nreplicates = atbp
+    println(class)
+    scaling_sub = @subset(scaling, :class .== class)
+    println("Bootstrapping...")
+    results = @showprogress map(1:nreplicates) do i
+        scaling_boot = resample_scaling(scaling_sub)
+        trawl_means = get_trawl_means(scaling_boot, trawl_locations, true)
+        popat!(trawl_means, rand(1:nrow(trawl_means)))
+        geotrawl_means = @chain trawl_means begin
+            @select(:x, :y, :ts, :length, :weight) 
+            georef((:x, :y))
+        end
+        age_comp = proportion_at_age(scaling_boot, stochastic=true)
+        ii = trawl_assignments_rand(coordinates.(surveydomain), 
+                    coordinates.(domain(geotrawl_means)))
+
+        df = DataFrame(nasc = nonneg_lusim(params, zdists) .* exp10(cal_error*randn() / 10),
+                class = class,
+                event_id = trawl_means.event_id[ii])
+        df = @chain df begin
+            leftjoin(@select(trawl_means, :event_id, :sigma_bs, :weight), on=:event_id)
+            leftjoin(age_comp, on=:event_id)
+            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs, :weight]), variable_name=:age, value_name=:p_age)
+            DataFramesMeta.@transform(:n_age = :nasc ./ (4π * :sigma_bs) .* :p_age)
+            @by(:age, 
+                :n_age = sum(skipmissing(:n_age)) * dA,
+                :weight = mean(:weight))
+            DataFramesMeta.@transform(:i = i)
+        end
+        return df
+    end
+    return vcat(results...)
+end
+
+function simulate_classes(class_problems, surveydata)
+    class_results = map(p -> simulate(p, surveydata), class_problems)
+    results = @chain vcat(class_results...) begin
+        @by([:age, :i],
+            :n_age = sum(:n_age), :weight = mean(:weight))
+        DataFramesMeta.@transform(:biomass_age = :n_age .* :weight)
+    end
+    return results
 end
 
 # end # module
