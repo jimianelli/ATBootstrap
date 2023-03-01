@@ -4,6 +4,9 @@ using GeoStats, GeoStatsPlots
 using Statistics, StatsBase
 using Distributions
 using LinearAlgebra
+using Distances
+using NearestNeighbors
+using ProgressMeter
 
 # struct SurveyData
 #     acoustics
@@ -13,7 +16,7 @@ using LinearAlgebra
 
 const zdist_candidates = [Gamma, InverseGamma, InverseGaussian, LogNormal]
 
-function define_conditional_sim(acoustics, maxlag=200.0)
+function define_conditional_sim(acoustics, surveydomain, maxlag=200.0)
     geonasc = acoustics[!, [:nasc, :x, :y]]
     geonasc.nasc .+= 1e-3
     geonasc.x .+= 1e-3 .* randn.()
@@ -172,12 +175,24 @@ function get_trawl_means(scaling, trawl_locations, stochastic=false)
         @by(:event_id, 
             :sigma_bs = mean(:sigma_bs, Weights(:w)),
             :sigma_bs_std = std(:sigma_bs, Weights(:w)),
-            :length = mean(:primary_length, Weights(:w)),
-            :weight = mean(:weight, Weights(:w)))
-        DataFramesMeta.@transform(:ts = 10log10.(:sigma_bs))
+            :length = mean(:primary_length, Weights(:w)))        
+            DataFramesMeta.@transform(:ts = 10log10.(:sigma_bs))
         innerjoin(trawl_locations, on=:event_id)
     end
     return trawl_means
+end
+
+function weights_at_age(scaling; age_max=AGE_MAX, stochastic=false)
+    age_func = stochastic ? predict_age_stochastic : predict_age
+    weight_func = stochastic ? predict_weight_stochastic : predict_weight
+    res = @chain scaling begin
+        DataFramesMeta.@transform(
+            :age = age_func.(:primary_length), 
+            :weight = weight_func.(:primary_length))
+        DataFramesMeta.@transform(:age = "age" .* lpad.(string.(:age), 2, "0"))
+        @by(:age, :weight = mean(:weight))
+    end
+    return res
 end
 
 function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
@@ -201,15 +216,14 @@ function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
     return DataFrames.unstack(age_comp, :age, :p_age)
 end
 
-function ATSurveyData(acoustics, scaling, trawl_locations)
-    return (;acoustics, scaling, trawl_locations)
+function ATSurveyData(acoustics, scaling, trawl_locations, domain)
+    return (;acoustics, scaling, trawl_locations, domain)
 end
 
 function ATBootstrapProblem(surveydata, class, cal_error, dA;
         nreplicates=500, zdist_candidates=zdist_candidates)
-    println(class)
-    acoustics_sub = @subset(acoustics, :class .== class)
-    variogram, problem = define_conditional_sim(acoustics_sub)
+    acoustics_sub = @subset(surveydata.acoustics, :class .== class)
+    variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain)
     params = get_lungs_params(problem, variogram.model)
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
@@ -233,25 +247,28 @@ function simulate(atbp, surveydata)
         trawl_means = get_trawl_means(scaling_boot, trawl_locations, true)
         popat!(trawl_means, rand(1:nrow(trawl_means)))
         geotrawl_means = @chain trawl_means begin
-            @select(:x, :y, :ts, :length, :weight) 
+            @select(:x, :y, :ts, :length) 
             georef((:x, :y))
         end
         age_comp = proportion_at_age(scaling_boot, stochastic=true)
+        age_weights = weights_at_age(scaling, stochastic=true)
         ii = trawl_assignments_rand(coordinates.(surveydomain), 
                     coordinates.(domain(geotrawl_means)))
 
-        df = DataFrame(nasc = nonneg_lusim(params, zdists) .* exp10(cal_error*randn() / 10),
-                class = class,
-                event_id = trawl_means.event_id[ii])
+        df = DataFrame(
+            nasc = nonneg_lusim(params, zdists) .* exp10(cal_error*randn() / 10),
+            class = class,
+            event_id = trawl_means.event_id[ii]
+        )
         df = @chain df begin
-            leftjoin(@select(trawl_means, :event_id, :sigma_bs, :weight), on=:event_id)
+            leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
             leftjoin(age_comp, on=:event_id)
-            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs, :weight]), variable_name=:age, value_name=:p_age)
+            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]), variable_name=:age, value_name=:p_age)
             DataFramesMeta.@transform(:n_age = :nasc ./ (4π * :sigma_bs) .* :p_age)
             @by(:age, 
-                :n_age = sum(skipmissing(:n_age)) * dA,
-                :weight = mean(:weight))
-            DataFramesMeta.@transform(:i = i)
+                :n_age = sum(skipmissing(:n_age)) * dA)
+            leftjoin(age_weights, on=:age)
+            DataFramesMeta.@transform(:biomass_age = :n_age .* :weight,:i = i)
         end
         return df
     end
@@ -262,8 +279,7 @@ function simulate_classes(class_problems, surveydata)
     class_results = map(p -> simulate(p, surveydata), class_problems)
     results = @chain vcat(class_results...) begin
         @by([:age, :i],
-            :n_age = sum(:n_age), :weight = mean(:weight))
-        DataFramesMeta.@transform(:biomass_age = :n_age .* :weight)
+            :n_age = sum(:n_age), :biomass_age = sum(:biomass_age))
     end
     return results
 end

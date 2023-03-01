@@ -1,15 +1,10 @@
 using CSV, DataFrames, DataFramesMeta
 using GeoStats, GeoStatsPlots
-using NearestNeighbors
-using Distances
 using Statistics, StatsBase
-using KernelDensity
 using Distributions
-using ConcaveHull
 using Random
-using LinearAlgebra
+using ConcaveHull
 using StatsPlots, StatsPlots.PlotMeasures
-using ProgressMeter
 
 using Revise
 includet(joinpath(@__DIR__, "src", "ATBootstrap.jl"))
@@ -24,10 +19,8 @@ scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
 surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
 surveydomain = shuffle(surveydomain) # this seems to fix the issue with directional artifacts
 surveydomain =  PointSet(Matrix(surveydomain)')
-
 scaling_classes = unique(scaling.class)
 
-# spatial binning
 
 acoustics = @chain acoustics begin
     @subset(in(scaling_classes).(:class), :transect .< 200)
@@ -38,19 +31,19 @@ end
 @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
-surveydata = (;acoustics, scaling, trawl_locations, scaling_classes)
+surveydata = ATSurveyData(acoustics, scaling, trawl_locations, surveydomain)
 
-cal_error = 0.1 #dB #Normal(0, 0.1)
+cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
     return ATBootstrapProblem(surveydata, class, cal_error, dA, nreplicates=1000)
 end
 
-surveydomain = solution_domain(class_problems[1])
+simdomain = solution_domain(class_problems[1])
 sim_fields = [nonneg_lusim(p) for p in class_problems]
 sim_plots = map(enumerate(sim_fields)) do (i, x)
-    plot(surveydomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
+    plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
         markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
         markersize=1.5, xlabel="Easting (km)", ylabel="Northing (km)")
     df = @subset(acoustics, :class .== scaling_classes[i])
@@ -64,6 +57,7 @@ plot(sim_plots..., size=(1000, 1000))
 #     title=string(scaling_classes[i]), markersize=4.2, background_color=:black, 
 #     xlabel="Easting (km)", ylabel="Northing (km)", size=(1000, 1000))
 
+simulate(class_problems[1], surveydata)
 
 results = simulate_classes(class_problems, surveydata)
 
@@ -90,7 +84,7 @@ results = simulate_classes(class_problems, surveydata)
     fill=true, alpha=0.7, ylims=(0, 30), palette=:Paired_10,
     xlabel="Million tons", ylabel="Probability density")
 @df results density(:biomass_age/1e9, group=:age, palette=:Paired_10, fill=true, 
-    alpha=0.7, ylims=(0, 0.05),
+    alpha=0.7, ylims=(0, 0.2),
     xlabel="Million tons", ylabel="Probability density")
 
 @df results boxplot(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
