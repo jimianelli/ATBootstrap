@@ -291,7 +291,9 @@ function read_survey_files(surveydir)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = shuffle(surveydomain) # this seems to fix the issue with directional artifacts
     surveydomain =  PointSet(Matrix(surveydomain)')
-    return acoustics, scaling, trawl_locations, surveydomain
+    return (;acoustics, scaling, trawl_locations, surveydomain)
 end
+
+
 
 # end # module
