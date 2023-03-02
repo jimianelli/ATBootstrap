@@ -284,4 +284,14 @@ function simulate_classes(class_problems, surveydata)
     return results
 end
 
+function read_survey_files(surveydir)
+    acoustics = CSV.read(joinpath(surveydir, "acoustics_projected.csv"), DataFrame)
+    trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
+    scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
+    surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
+    surveydomain = shuffle(surveydomain) # this seems to fix the issue with directional artifacts
+    surveydomain =  PointSet(Matrix(surveydomain)')
+    return acoustics, scaling, trawl_locations, surveydomain
+end
+
 # end # module
