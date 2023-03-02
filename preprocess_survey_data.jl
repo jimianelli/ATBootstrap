@@ -5,7 +5,7 @@ using ConcaveHull
 using Statistics
 using LinearAlgebra
 
-surveydir = joinpath("surveydata", "201801")
+surveydir = joinpath("surveydata", "202207")
 scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
 scaling_classes = unique(scaling.class)
 
@@ -36,8 +36,9 @@ acoustics.y = [u.y / 1e3 for u in utm]
 # event_class = @by(scaling, :event_id, :class = length(unique(class))) # need to figure this out too
 
 trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations.csv"), DataFrame)
+rename!(lowercase, trawl_locations)
 trawl_locations = @chain trawl_locations begin
-    @transform(:lla = LLA.(:EQLatitude, :EQLongitude, 0.0))
+    @transform(:lla = LLA.(:eqlatitude, :eqlongitude, 0.0))
     @transform(:utm = [UTM(x, utmzone, true, wgs84) for x in :lla])
     @transform(:x = [u.x / 1e3 for u in :utm], :y = [u.y / 1e3 for u in :utm])
 end
