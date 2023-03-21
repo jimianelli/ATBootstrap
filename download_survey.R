@@ -7,8 +7,8 @@ afsc <- dbConnect(odbc(), "AFSC", UID="urmys", PWD="SU_Nov_14Welcome")
 
 
 SURVEY = 201207
-ANALYSIS_ID = 1
 DATA_SET_ID = 1
+ANALYSIS_ID = 5
 
 
 zonemin = 1
@@ -152,3 +152,4 @@ dir.create(surveydir)
 write.csv(trawl_locations, paste0(surveydir, "/trawl_locations.csv"))
 write.csv(scaling, paste0(surveydir, "/scaling.csv"))
 write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
+print(paste0("Downloaded survey ", SURVEY, "!"))
