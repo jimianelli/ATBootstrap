@@ -7,13 +7,15 @@ using ConcaveHull
 using StatsPlots, StatsPlots.PlotMeasures
 
 using Revise
-includet(joinpath(@__DIR__, "src", "ATBootstrap.jl"))
+includet(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 
-surveydir = joinpath(@__DIR__, "surveydata", "202207")
+survey = "201407"
+surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, trawl_locations = read_survey_files(surveydir)
+acoustics, scaling, trawl_locations, surveydomain = read_survey_files(surveydir)
+
 scaling_classes = unique(scaling.class)
 
 acoustics = @chain acoustics begin
@@ -22,7 +24,8 @@ acoustics = @chain acoustics begin
     @by([:transect, :class, :x, :y], 
         :lon = mean(:lon), :lat = mean(:lat), :nasc = mean(:nasc))
 end
-@df acoustics scatter(:x, :y, group=:class, markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
+@df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
+    markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
 surveydata = ATSurveyData(acoustics, scaling, trawl_locations, surveydomain)
@@ -39,9 +42,9 @@ sim_fields = [nonneg_lusim(p) for p in class_problems]
 sim_plots = map(enumerate(sim_fields)) do (i, x)
     plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
         markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
-        markersize=1.5, xlabel="Easting (km)", ylabel="Northing (km)")
+        markersize=2.2, xlabel="Easting (km)", ylabel="Northing (km)")
     df = @subset(acoustics, :class .== scaling_classes[i])
-    scatter!(df.x, df.y, color=:white, markersize=df.nasc*1e-3, alpha=0.3,
+    scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
         markerstrokewidth=0)
 end
 plot(sim_plots..., size=(1000, 1000))
@@ -51,42 +54,40 @@ plot(sim_plots..., size=(1000, 1000))
 #     title=string(scaling_classes[i]), markersize=4.2, background_color=:black, 
 #     xlabel="Easting (km)", ylabel="Northing (km)", size=(1000, 1000))
 
-simulate(class_problems[1], surveydata)
+unique(trawl_locations.event_id)
+unique(scaling.event_id)
 
 results = simulate_classes(class_problems, surveydata)
+CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
-
-@df results density(:n_age/1e9, group=:age, xlims=(0, 8),
-    fill=true, alpha=0.7, ylims=(0, 30), palette=:Paired_10,
-    xlabel="Billions of fish", ylabel="Probability density")
-@df results density(:n_age/1e9, group=:age, palette=:Paired_10, fill=true, 
-    alpha=0.7, ylims=(0, 0.01),
-    xlabel="Billions of fish", ylabel="Probability density")
+@df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
+    fill=true, alpha=0.7, ylims=(0, 25), palette=:Paired_10,
+    xlabel="Billions of fish", ylabel="Probability density",
+    title=survey)
 
 @df results boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    ylabel="Billions of fish")
-@df results boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    ylims=(0, 10), ylabel="Billions of fish")
+    xlabel="Age class", ylabel="Abundance (billions)")
 
-@by(results, :age, 
-    :n_age = mean(:n_age),
-    :std_age = std(:n_age), 
-    :cv_age = std(:n_age) / mean(:n_age) * 100)
+@chain results begin
+    @orderby(:age)
+    @by(:age, 
+        :n_age = mean(:n_age),
+        :std_age = std(:n_age), 
+        :cv_age = std(:n_age) / mean(:n_age) * 100)
+end
 
 
-@df results density(:biomass_age/1e9, group=:age, xlims=(0, 4),
-    fill=true, alpha=0.7, ylims=(0, 30), palette=:Paired_10,
-    xlabel="Million tons", ylabel="Probability density")
-@df results density(:biomass_age/1e9, group=:age, palette=:Paired_10, fill=true, 
-    alpha=0.7, ylims=(0, 0.2),
+@df results density(:biomass_age/1e9, group=:age, #xlims=(0, 4),
+    fill=true, alpha=0.7, ylims=(0, 50), palette=:Paired_10,
     xlabel="Million tons", ylabel="Probability density")
 
 @df results boxplot(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
-    ylabel="Million tons")
-@df results boxplot(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
-    ylims=(0, 10), ylabel="Million tons")
+    xlabel="Age class", ylabel="Million tons")
 
-@by(results, :age, 
-    :biomass_age = mean(:biomass_age),
-    :std_age = std(:biomass_age), 
-    :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
+@chain results begin
+    @orderby(:age)
+    @by(:age, 
+        :biomass_age = mean(:biomass_age),
+        :std_age = std(:biomass_age), 
+        :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
+end

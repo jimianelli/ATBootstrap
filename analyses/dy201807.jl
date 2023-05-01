@@ -7,15 +7,17 @@ using ConcaveHull
 using StatsPlots, StatsPlots.PlotMeasures
 
 using Revise
-includet(joinpath(@__DIR__, "src", "ATBootstrap.jl"))
+includet(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 
-surveydir = joinpath(@__DIR__, "surveydata", "201608")
+survey = "201807"
+surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, trawl_locations = read_survey_files(surveydir)
+acoustics, scaling, trawl_locations, surveydomain = read_survey_files(surveydir)
 
 scaling_classes = unique(scaling.class)
+scaling_classes = ["PK1", "PK1_FILTERED"]
 
 acoustics = @chain acoustics begin
     @subset(in(scaling_classes).(:class), :transect .< 200)
@@ -23,7 +25,8 @@ acoustics = @chain acoustics begin
     @by([:transect, :class, :x, :y], 
         :lon = mean(:lon), :lat = mean(:lat), :nasc = mean(:nasc))
 end
-@df acoustics scatter(:x, :y, group=:class, markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
+@df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
+    markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
 surveydata = ATSurveyData(acoustics, scaling, trawl_locations, surveydomain)
@@ -40,9 +43,9 @@ sim_fields = [nonneg_lusim(p) for p in class_problems]
 sim_plots = map(enumerate(sim_fields)) do (i, x)
     plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
         markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
-        markersize=2.5, xlabel="Easting (km)", ylabel="Northing (km)")
+        markersize=2.4, xlabel="Easting (km)", ylabel="Northing (km)")
     df = @subset(acoustics, :class .== scaling_classes[i])
-    scatter!(df.x, df.y, color=:white, markersize=df.nasc*1e-3, alpha=0.3,
+    scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
         markerstrokewidth=0)
 end
 plot(sim_plots..., size=(1000, 1000))
@@ -51,22 +54,20 @@ plot(sim_plots..., size=(1000, 1000))
 # plot(domain(sol), zcolor=x, markerstrokewidth=0, markershape=:square, clims=(0, quantile(x, 0.999)), 
 #     title=string(scaling_classes[i]), markersize=4.2, background_color=:black, 
 #     xlabel="Easting (km)", ylabel="Northing (km)", size=(1000, 1000))
-
-
-# BROKEN: scaling data only has one event_id for some reason.
-# Need to check w/ Kresimir.
 unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
 results = simulate_classes(class_problems, surveydata)
-
+# results = simulate(class_problems[1], surveydata)
+CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
 @df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
     fill=true, alpha=0.7, ylims=(0, 25), palette=:Paired_10,
-    xlabel="Billions of fish", ylabel="Probability density")
+    xlabel="Billions of fish", ylabel="Probability density",
+    title=survey)
 
 @df results boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    ylabel="Billions of fish")
+    xlabel="Age class", ylabel="Abundance (billions)")
 
 @chain results begin
     @orderby(:age)
@@ -82,7 +83,7 @@ end
     xlabel="Million tons", ylabel="Probability density")
 
 @df results boxplot(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
-    ylabel="Million tons")
+    xlabel="Age class", ylabel="Million tons")
 
 @chain results begin
     @orderby(:age)
