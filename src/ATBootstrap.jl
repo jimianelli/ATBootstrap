@@ -21,7 +21,7 @@ function define_conditional_sim(acoustics, surveydomain, maxlag=200.0)
     geonasc.nasc .+= 1e-3
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
-    evg = EmpiricalVariogram(geonasc, :nasc, maxlag=maxlag)
+    evg = EmpiricalVariogram(geonasc, :nasc, nlags=10, maxlag=maxlag)
     tvg = fit(ExponentialVariogram, evg)
     prob = SimulationProblem(geonasc, surveydomain, :nasc => Float64, 1)
     variogram = (empirical = evg, model = tvg)
@@ -138,7 +138,7 @@ function predict_age(L, age_max=AGE_MAX)
        return age_max
    end
 end
-predict_age_stochastic(L, age_max=AGE_MAX) = max(1, predict_age(L, age_max) + rand([-1, 0, 0, 0, 1]))
+predict_age_stochastic(L, age_max=AGE_MAX) = max(0, predict_age(L, age_max) + rand([-1, 0, 0, 0, 1]))
 
 const a = 1.9
 function trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords)
@@ -189,7 +189,7 @@ function weights_at_age(scaling; age_max=AGE_MAX, stochastic=false)
         DataFramesMeta.@transform(
             :age = age_func.(:primary_length), 
             :weight = weight_func.(:primary_length))
-        DataFramesMeta.@transform(:age = "age" .* lpad.(string.(:age), 2, "0"))
+        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2, "0"))
         @by(:age, :weight = mean(:weight))
     end
     return res
@@ -197,7 +197,7 @@ end
 
 function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
     age = stochastic ? predict_age_stochastic : predict_age
-    all_ages = @chain Iterators.product(unique(scaling.event_id), 1:age_max) begin
+    all_ages = @chain Iterators.product(unique(scaling.event_id), 0:age_max) begin
         DataFrame()
         rename([:event_id, :age])
         sort()
@@ -209,7 +209,7 @@ function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
         DataFramesMeta.@transform(:p_age = :p_age / sum(:p_age))
         rightjoin(all_ages, on=[:event_id, :age])
         DataFramesMeta.@transform(:p_age = replace(:p_age, missing => 0.0))
-        DataFramesMeta.@transform(:age = "age" .* lpad.(string.(:age), 2, "0"))
+        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2, "0"))
         @orderby(:event_id, :age)
     end
     # return age_comp
@@ -268,7 +268,7 @@ function simulate(atbp, surveydata)
             @by(:age, 
                 :n_age = sum(skipmissing(:n_age)) * dA)
             leftjoin(age_weights, on=:age)
-            DataFramesMeta.@transform(:biomass_age = :n_age .* :weight,:i = i)
+            DataFramesMeta.@transform(:biomass_age = :n_age .* :weight, :i = i)
         end
         return df
     end
