@@ -5,7 +5,7 @@ using ConcaveHull
 using Statistics
 using LinearAlgebra
 
-surveydir = joinpath("surveydata", "202207")
+surveydir = joinpath("surveydata", "201608")
 scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
 scaling_classes = unique(scaling.class)
 
@@ -56,7 +56,7 @@ transect_ends = @chain acoustics begin
 end
 v = [[row.x, row.y] for row in eachrow(transect_ends)]
 surveyhull = concave_hull(v, 20)
-@df acoustics scatter(:x, :y)
+@df acoustics scatter(:x, :y, aspect_ratio=:equal)
 plot!(surveyhull)
 
 dx = 10.0

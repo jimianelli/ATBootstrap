@@ -3,12 +3,12 @@ library(glue)
 library(dplyr)
 library(stringr)
 
-afsc <- dbConnect(odbc(), "AFSC", UID="urmys", PWD="SU_Nov_14Welcome")
+afsc <- dbConnect(odbc(), "AFSC", UID="urmys", PWD="SU_Mar_23Welcome")
 
 
-SURVEY = 201207
-DATA_SET_ID = 1
-ANALYSIS_ID = 5
+SURVEY = 201608
+DATA_SET_ID = 2
+ANALYSIS_ID = 1
 
 
 zonemin = 1
@@ -30,7 +30,7 @@ cells_query <- function(survey, ship, datasetid, zonemax, zonemin) {
       macebase2.integration_results
       WHERE
       macebase2.integration_results.survey ='{survey} '
-      AND macebase2.integration_results.data_set_id ='1';
+      AND macebase2.integration_results.data_set_id ='{datasetid}';
       ")
   return(sql)
 }
@@ -48,7 +48,7 @@ intervals_query <- function(survey, ship, datasetid, transectmax, transectmin) {
       macebase2.intervals
       WHERE
       macebase2.intervals.survey = '{survey}'
-      AND macebase2.intervals.data_set_id = '1';
+      AND macebase2.intervals.data_set_id = '{datasetid}';
       ")
   return(sql)
 }
@@ -61,10 +61,12 @@ cleanup <- function(df) {
 
 
 
-download_scaling <- function(connection, survey) {
+download_scaling <- function(connection, survey, datasetid, analysisid) {
   sql = glue("SELECT *
           FROM macebase2.scaling_key_source_data
-          WHERE macebase2.scaling_key_source_data.survey = {survey};")
+          WHERE macebase2.scaling_key_source_data.survey = {survey}
+          AND macebase2.scaling_key_source_data.data_set_id ='{datasetid}'
+          AND macebase2.scaling_key_source_data.analysis_id ='{analysisid}';")
   print("Downloading scaling key source...")
   scaling = dbGetQuery(connection, sql)
 
@@ -144,7 +146,7 @@ trawl_locations <- download_trawl_locations(afsc, SURVEY)
 trawl_locations <- trawl_locations %>%
   tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
 
-scaling <- download_scaling(afsc, SURVEY)
+scaling <- download_scaling(afsc, SURVEY, DATA_SET_ID, ANALYSIS_ID)
 acoustics <- download_acoustics(afsc, SURVEY)
 
 surveydir = paste0("surveydata/", SURVEY)
