@@ -100,3 +100,27 @@ end
         :std_age = std(:biomass_age), 
         :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
 end
+
+# Testing out stepwise error removal
+
+class_problems = map(scaling_classes) do class
+    println(class)
+    return ATBootstrapProblem(surveydata, class, cal_error, dA, nreplicates=50, bootspecs=bs)
+end
+
+bs = BootSpecs(
+    resample_scaling=true,
+    get_trawl_means=true,
+    jackknife_trawl=true,
+    proportion_at_age=true,
+    weights_at_age=true,
+    trawl_assignments=true,
+    nonneg_lusim=false,
+    calibration=true
+)
+
+results = simulate_classes(class_problems, surveydata, bs)
+
+@df @subset(results, :age .!= "00") boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Abundance (billions)",
+    ylims=(0, 9), size=(1000, 800))

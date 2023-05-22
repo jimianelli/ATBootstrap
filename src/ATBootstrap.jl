@@ -67,22 +67,28 @@ function get_zdists(Dist, lungs_params, ϵ=cbrt(eps()))
     return [Dist(p...) for p in dist_params.(Dist, μz, vz)]
 end
 
-function nonneg_lusim!(x, params, zdists)
+function nonneg_lumult!(x, params, z)
     data, μx, L, μ, dlocs, slocs = params
-    x[slocs] = L * rand.(zdists)
+    x[slocs] = L * z
     x[dlocs] = data
 end
 
-function nonneg_lusim(params, zdists)
+function nonneg_lumult(params, z)
     data, μx, L, μ, dlocs, slocs = params
     npts = length(dlocs) + length(slocs)
     x = zeros(npts)
-    nonneg_lusim!(x, params, zdists)
+    nonneg_lumult!(x, params, z)
     return x
 end
 
+function nonneg_lusim(params, zdists)
+    z = rand.(zdists)
+    return nonneg_lumult(params, z)
+end
+
 function nonneg_lusim(atbp)
-    return nonneg_lusim(atbp.params, atbp.zdists)
+    z = rand.(atbp.zdists)
+    return nonneg_lumult(atbp.params, z)
 end
 
 
@@ -141,29 +147,38 @@ end
 predict_age_stochastic(L, age_max=AGE_MAX) = max(0, predict_age(L, age_max) + rand([-1, 0, 0, 0, 1]))
 
 const a = 1.9
-function trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords)
+function trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords, stochastic=true)
     idx, dists = knn(kdtree, pixel_coords, length(trawl_coords))
-    idx1 = [sample(i, Weights(1 ./ d.^a)) for (i, d) in zip(idx, dists)]
+    if stochastic
+        idx1 = [sample(i, Weights(1 ./ d.^a)) for (i, d) in zip(idx, dists)]
+    else
+        idx1 = idx
+    end
     assignments .= idx1
 end
-function trawl_assignments_rand!(assignments, pixel_coords, trawl_coords)
+function trawl_assignments_rand!(assignments, pixel_coords, trawl_coords, stochastic=true)
     kdtree = KDTree(trawl_coords)
-    trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords)
+    trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords, stochastic)
 end
-function trawl_assignments_rand(pixel_coords, trawl_coords)
+function trawl_assignments_rand(pixel_coords, trawl_coords, stochastic=true)
     assignments = Vector{Int}(undef, length(pixel_coords))
-    trawl_assignments_rand!(assignments, pixel_coords, trawl_coords)
+    trawl_assignments_rand!(assignments, pixel_coords, trawl_coords, stochastic)
     return assignments
 end
 
-function resample_df(df)
+function resample_df(df, stochastic)
     n = nrow(df)
-    ii = sample(1:n, n)
+    if stochastic
+        ii = sample(1:n, n)
+    else
+        ii = 1:n
+    end
     return @view df[ii, :]
 end
 
-function resample_scaling(df)
-    return DataFramesMeta.combine(resample_df, DataFramesMeta.groupby(df, [:event_id, :class]))
+function resample_scaling(df, stochastic=true)
+    return DataFramesMeta.combine(x -> resample_df(x, stochastic),
+        DataFramesMeta.groupby(df, [:event_id, :class]))
 end
 
 function get_trawl_means(scaling, trawl_locations, stochastic=false)
@@ -216,18 +231,37 @@ function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
     return DataFrames.unstack(age_comp, :age, :p_age)
 end
 
+function simulate_cal_error(cal_error, stochastic=true) 
+    if stochastic
+        return exp10(cal_error*randn() / 10)
+    else
+        return exp10(0.0)
+    end
+end
+
 function ATSurveyData(acoustics, scaling, trawl_locations, domain)
     return (;acoustics, scaling, trawl_locations, domain)
 end
 
+@kwdef struct BootSpecs
+    resample_scaling::Bool=true
+    get_trawl_means::Bool=true
+    jackknife_trawl::Bool=true
+    proportion_at_age::Bool=true
+    weights_at_age::Bool=true
+    trawl_assignments::Bool=true
+    nonneg_lusim::Bool=true
+    calibration::Bool=true
+end
+
 function ATBootstrapProblem(surveydata, class, cal_error, dA;
-        nreplicates=500, zdist_candidates=zdist_candidates)
+        nreplicates=500, zdist_candidates=zdist_candidates, bootspecs=BootSpecs())
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
     variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain)
     params = get_lungs_params(problem, variogram.model)
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
-    return (;class, variogram, problem, params, optimal_dist, zdists,
+    return (; class, variogram, problem, params, optimal_dist, zdists,
         cal_error, dA, nreplicates)
 end
 
@@ -236,27 +270,35 @@ function solution_domain(atbp, variable=:nasc)
     return domain(sol)
 end
 
-function simulate(atbp, surveydata)
+function simulate(atbp, surveydata, bs=bs())
     acoustics, scaling, trawl_locations, scaling_classes = surveydata
     class, variogram, problem, params, optimal_dist, zdists, cal_error, dA, nreplicates = atbp
     println(class)
     scaling_sub = @subset(scaling, :class .== class)
+
+    z0 = rand.(zdists)
+
     println("Bootstrapping...")
     results = @showprogress map(1:nreplicates) do i
-        scaling_boot = resample_scaling(scaling_sub)
-        trawl_means = get_trawl_means(scaling_boot, trawl_locations, true)
-        popat!(trawl_means, rand(1:nrow(trawl_means)))
+        scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
+        trawl_means = get_trawl_means(scaling_boot, trawl_locations, bs.get_trawl_means)
+        if bs.jackknife_trawl
+            popat!(trawl_means, rand(1:nrow(trawl_means)))
+        end
         geotrawl_means = @chain trawl_means begin
             @select(:x, :y, :ts, :length) 
             georef((:x, :y))
         end
-        age_comp = proportion_at_age(scaling_boot, stochastic=true)
-        age_weights = weights_at_age(scaling, stochastic=true)
+        age_comp = proportion_at_age(scaling_boot, stochastic=bs.proportion_at_age)
+        age_weights = weights_at_age(scaling, stochastic=bs.weights_at_age)
         ii = trawl_assignments_rand(coordinates.(surveydomain), 
-                    coordinates.(domain(geotrawl_means)))
+                    coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
+
+        nasc = bs.nonneg_lusim ? nonneg_lusim(atbp) : nonneg_lumult(params, z0)
+        cal_error_sim = simulate_cal_error(cal_error,  bs.calibration)
 
         df = DataFrame(
-            nasc = nonneg_lusim(params, zdists) .* exp10(cal_error*randn() / 10),
+            nasc = nasc * cal_error_sim,
             class = class,
             event_id = trawl_means.event_id[ii]
         )
@@ -275,8 +317,8 @@ function simulate(atbp, surveydata)
     return vcat(results...)
 end
 
-function simulate_classes(class_problems, surveydata)
-    class_results = map(p -> simulate(p, surveydata), class_problems)
+function simulate_classes(class_problems, surveydata, bs=BootSpecs())
+    class_results = map(p -> simulate(p, surveydata, bs), class_problems)
     results = @chain vcat(class_results...) begin
         @by([:age, :i],
             :n_age = sum(:n_age), :biomass_age = sum(:biomass_age))
