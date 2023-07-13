@@ -171,7 +171,7 @@ end
 
 
 const a = 1.9
-function trawl_assignments_rand!(assignments, kdtree::KDTree, pixel_coords, trawl_coords, stochastic)
+function trawl_assignments!(assignments, kdtree::KDTree, pixel_coords, trawl_coords, stochastic)
     idx, dists = knn(kdtree, pixel_coords, length(trawl_coords))
     if stochastic
         idx1 = [sample(i, Weights(1 ./ d.^a)) for (i, d) in zip(idx, dists)]
@@ -181,14 +181,14 @@ function trawl_assignments_rand!(assignments, kdtree::KDTree, pixel_coords, traw
     assignments .= idx1
 end
 
-function trawl_assignments_rand!(assignments, pixel_coords, trawl_coords, stochastic=true)
+function trawl_assignments!(assignments, pixel_coords, trawl_coords, stochastic=true)
     kdtree = KDTree(trawl_coords)
-    trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords, stochastic)
+    trawl_assignments!(assignments, kdtree, pixel_coords, trawl_coords, stochastic)
 end
 
-function trawl_assignments_rand(pixel_coords, trawl_coords, stochastic=true)
+function trawl_assignments(pixel_coords, trawl_coords, stochastic=true)
     assignments = Vector{Int}(undef, length(pixel_coords))
-    trawl_assignments_rand!(assignments, pixel_coords, trawl_coords, stochastic)
+    trawl_assignments!(assignments, pixel_coords, trawl_coords, stochastic)
     return assignments
 end
 
@@ -321,7 +321,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=bs())
         age_weights = weights_at_age(scaling, stochastic=bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
         @assert nrow(age_weights) == 11
-        ii = trawl_assignments_rand(coordinates.(surveydomain), 
+        ii = trawl_assignments(coordinates.(surveydomain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
         nasc = bs.nonneg_lusim ? nonneg_lusim(atbp) : nonneg_lumult(params, z0)
