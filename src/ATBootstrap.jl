@@ -144,7 +144,7 @@ function predict_age(L, age_max=AGE_MAX)
        return age_max
    end
 end
-predict_age_stochastic(L, age_max=AGE_MAX) = max(0, predict_age(L, age_max) + rand([-1, 0, 0, 0, 1]))
+predict_age_stochastic(L, age_max=AGE_MAX) = max(0, predict_age(L + 2randn(), age_max))# + rand([-1, 0, 0, 0, 1]))
 
 const a = 1.9
 function trawl_assignments_rand!(assignments, kdtree::KDTree, pixel_coords, trawl_coords, stochastic)
