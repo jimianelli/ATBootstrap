@@ -38,7 +38,7 @@ cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
-    return ATBootstrapProblem(surveydata, class, cal_error, dA, nreplicates=1000)
+    return ATBootstrapProblem(surveydata, class, cal_error, dA)
 end
 
 pp = map(class_problems) do cp
@@ -66,7 +66,7 @@ plot(sim_plots..., size=(1000, 1000))
 unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
-results = simulate_classes(class_problems, surveydata)
+results = simulate_classes(class_problems, surveydata, nreplicates = 1000)
 CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
 @df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
@@ -77,7 +77,7 @@ CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 @df @subset(results, :age .!= "00") boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
     xlabel="Age class", ylabel="Abundance (billions)")
 
-@chain results begin
+results_summary = @chain results begin
     @orderby(:age)
     @by(:age, 
         :n_age = mean(:n_age),
@@ -103,24 +103,22 @@ end
 
 # Testing out stepwise error removal
 
-class_problems = map(scaling_classes) do class
-    println(class)
-    return ATBootstrapProblem(surveydata, class, cal_error, dA, nreplicates=50, bootspecs=bs)
+results_step = stepwise_error_removal(class_problems, surveydata; nreplicates = 1000)
+
+results[!, :eliminated_error] .= "None"
+
+stepwise_summary = @chain results_step begin
+    @orderby(:age)
+    @by([:eliminated_error, :age], 
+        :biomass_age = mean(:biomass_age),
+        :std_age = std(:biomass_age), 
+        :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
+    # @select(:age, :eliminated_error, :cv_age)
+    # unstack(:age, :eliminated_error, :cv_age)
 end
 
-bs = BootSpecs(
-    resample_scaling=true,
-    get_trawl_means=true,
-    jackknife_trawl=true,
-    proportion_at_age=true,
-    weights_at_age=true,
-    trawl_assignments=true,
-    nonneg_lusim=false,
-    calibration=true
-)
-
-results = simulate_classes(class_problems, surveydata, bs)
-
-@df @subset(results, :age .!= "00") boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Abundance (billions)",
-    ylims=(0, 9), size=(1000, 800))
+@df stepwise_summary plot(:age, :cv_age, group=:eliminated_error, marker=:o, 
+    markerstrokewidth=0, size=(800, 600),
+    xlabel="Age class", ylabel="C.V. (%)", title=survey)
+@df results_summary plot!(:age, :cv_age, linewidth=2, marker=:o, label="None", 
+    color=:black)

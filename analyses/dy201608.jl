@@ -34,7 +34,7 @@ cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
-    return ATBootstrapProblem(surveydata, class, cal_error, dA, nreplicates=1000)
+    return ATBootstrapProblem(surveydata, class, cal_error, dA)
 end
 
 simdomain = solution_domain(class_problems[1])
@@ -72,7 +72,7 @@ cp = class_problems[1]
 unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
-results = simulate_classes(class_problems, surveydata)
+results = simulate_classes(class_problems, surveydata, nreplicates=1000)
 CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
 @df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
@@ -83,7 +83,7 @@ CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 @df results boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
     xlabel="Age class", ylabel="Abundance (billions)")
 
-@chain results begin
+results_summary = @chain results begin
     @orderby(:age)
     @by(:age, 
         :n_age = mean(:n_age),
@@ -107,3 +107,21 @@ end
         :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
 end
     
+
+results_step = stepwise_error_removal(class_problems, surveydata; nreplicates = 100)
+
+stepwise_summary = @chain results_step begin
+    @orderby(:age)
+    @by([:eliminated_error, :age], 
+        :biomass_age = mean(:biomass_age),
+        :std_age = std(:biomass_age), 
+        :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
+    # @select(:age, :eliminated_error, :cv_age)
+    # unstack(:age, :eliminated_error, :cv_age)
+end
+
+@df stepwise_summary plot(:age, :cv_age, group=:eliminated_error, marker=:o, 
+    markerstrokewidth=0, size=(800, 600),
+    xlabel="Age class", ylabel="C.V. (%)", title=survey);
+@df results_summary plot!(:age, :cv_age, linewidth=2, marker=:o, label="None", 
+    color=:black)
