@@ -147,19 +147,21 @@ end
 predict_age_stochastic(L, age_max=AGE_MAX) = max(0, predict_age(L, age_max) + rand([-1, 0, 0, 0, 1]))
 
 const a = 1.9
-function trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords, stochastic=true)
+function trawl_assignments_rand!(assignments, kdtree::KDTree, pixel_coords, trawl_coords, stochastic)
     idx, dists = knn(kdtree, pixel_coords, length(trawl_coords))
     if stochastic
         idx1 = [sample(i, Weights(1 ./ d.^a)) for (i, d) in zip(idx, dists)]
     else
-        idx1 = idx
+        idx1 = [i[argmin(d)] for (i, d) in zip(idx, dists)]
     end
     assignments .= idx1
 end
+
 function trawl_assignments_rand!(assignments, pixel_coords, trawl_coords, stochastic=true)
     kdtree = KDTree(trawl_coords)
     trawl_assignments_rand!(assignments, kdtree, pixel_coords, trawl_coords, stochastic)
 end
+
 function trawl_assignments_rand(pixel_coords, trawl_coords, stochastic=true)
     assignments = Vector{Int}(undef, length(pixel_coords))
     trawl_assignments_rand!(assignments, pixel_coords, trawl_coords, stochastic)
