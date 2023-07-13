@@ -328,6 +328,21 @@ function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSp
     return results
 end
 
+function stepwise_error_removal(class_problems, surveydata; kwargs...)
+    error_sources = string.(fieldnames(BootSpecs))
+    results = map(eachindex(error_sources)) do i
+        println("\nLeaving out $(error_sources[i]) ($(i)/$(length(error_sources)))...")
+        errs = fill(true, 8)
+        errs[i] = false
+        bs = BootSpecs(errs...)
+        res = simulate_classes(class_problems, surveydata; bs, kwargs...)
+        res[!, :eliminated_error] .= error_sources[i]
+        res
+    end
+    return vcat(results...)
+end
+
+
 function read_survey_files(surveydir)
     acoustics = CSV.read(joinpath(surveydir, "acoustics_projected.csv"), DataFrame)
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
