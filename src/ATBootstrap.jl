@@ -257,14 +257,14 @@ end
 end
 
 function ATBootstrapProblem(surveydata, class, cal_error, dA;
-        nreplicates=500, zdist_candidates=zdist_candidates, bootspecs=BootSpecs())
+        zdist_candidates=zdist_candidates)
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
     variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain)
     params = get_lungs_params(problem, variogram.model)
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
     return (; class, variogram, problem, params, optimal_dist, zdists,
-        cal_error, dA, nreplicates)
+        cal_error, dA)
 end
 
 function solution_domain(atbp, variable=:nasc)
@@ -272,9 +272,9 @@ function solution_domain(atbp, variable=:nasc)
     return domain(sol)
 end
 
-function simulate(atbp, surveydata, bs=bs())
+function simulate(atbp, surveydata; nreplicates=500, bs=bs())
     acoustics, scaling, trawl_locations, scaling_classes = surveydata
-    class, variogram, problem, params, optimal_dist, zdists, cal_error, dA, nreplicates = atbp
+    class, variogram, problem, params, optimal_dist, zdists, cal_error, dA = atbp
     println(class)
     scaling_sub = @subset(scaling, :class .== class)
 
@@ -319,8 +319,8 @@ function simulate(atbp, surveydata, bs=bs())
     return vcat(results...)
 end
 
-function simulate_classes(class_problems, surveydata, bs=BootSpecs())
-    class_results = map(p -> simulate(p, surveydata, bs), class_problems)
+function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSpecs())
+    class_results = map(p -> simulate(p, surveydata; nreplicates, bs), class_problems)
     results = @chain vcat(class_results...) begin
         @by([:age, :i],
             :n_age = sum(:n_age), :biomass_age = sum(:biomass_age))
