@@ -125,10 +125,22 @@ function choose_distribution(distributions, nasc, lungs_params; nreplicates=500,
     return dist_fits.distribution[argmin(dist_fits.mean_kld)]    
 end
 
-predict_ts(L) = -66 + 20log10(L)
-predict_ts_stochastic(L) = -66 + 0.14randn() + 20log10(L) # standard error from Nate's paper (email on 2023-01-31)
-predict_weight(L) = 1e-5 * L^2.9
-predict_weight_stochastic(L) = predict_weight(L) * (1 + 0.05 * randn())
+function predict_ts(L, stochastic=false)
+    TS = -66 + 20log10(L)
+    if stochastic
+        return TS + 0.14*randn() # standard error from Lauffenburger et al. 2023
+    end
+    return TS
+end
+
+function predict_weight(L, stochastic=false)
+    W = 1e-5 * L^2.9
+    if stochastic
+        return W * (1 + 0.05 * randn())
+    end
+    return W
+end
+# predict_weight_stochastic(L) = predict_weight(L) * (1 + 0.05 * randn())
 
 
 # Numbers from Matta and Kimura 2012, Age determination manual
@@ -137,14 +149,26 @@ const t₀ = -0.205
 const K = 0.1937
 const AGE_MAX = 10
 predict_length(t) = L∞ * (1 - exp(-K * (t - t₀)))
-function predict_age(L, age_max=AGE_MAX)
+function predict_age_deterministic(L, age_max=AGE_MAX)
     if L < predict_length(age_max)
         return round(Int, log(1 - L/L∞) / -K + t₀)
     else
        return age_max
    end
 end
-predict_age_stochastic(L, age_max=AGE_MAX) = max(0, predict_age(L + 2randn(), age_max))# + rand([-1, 0, 0, 0, 1]))
+
+function predict_age_stochastic(L, age_max=AGE_MAX)
+    return max(0, predict_age_deterministic(L + 2randn(), age_max))# + rand([-1, 0, 0, 0, 1]))
+end
+
+function predict_age(L, stochastic=true, age_max=AGE_MAX)
+    if stochastic
+        return predict_age_stochastic(L, age_max)
+    else
+        return predict_age_deterministic(L, age_max)
+    end
+end
+
 
 const a = 1.9
 function trawl_assignments_rand!(assignments, kdtree::KDTree, pixel_coords, trawl_coords, stochastic)
@@ -184,11 +208,9 @@ function resample_scaling(df, stochastic=true)
 end
 
 function get_trawl_means(scaling, trawl_locations, stochastic=false)
-    ts = stochastic ? predict_ts_stochastic : predict_ts
-    weight = stochastic ? predict_weight_stochastic : predict_weight
     trawl_means = @chain scaling begin
-        DataFramesMeta.@transform(:sigma_bs = exp10.(ts.(:ts_length)/10),
-                                  :weight = weight.(:primary_length))
+        # DataFramesMeta.@transform(:sigma_bs = exp10.(ts.(:ts_length)/10),
+        #                           :weight = weight.(:primary_length))
         @by(:event_id, 
             :sigma_bs = mean(:sigma_bs, Weights(:w)),
             :sigma_bs_std = std(:sigma_bs, Weights(:w)),
@@ -200,12 +222,10 @@ function get_trawl_means(scaling, trawl_locations, stochastic=false)
 end
 
 function weights_at_age(scaling; age_max=AGE_MAX, stochastic=false)
-    age_func = stochastic ? predict_age_stochastic : predict_age
-    weight_func = stochastic ? predict_weight_stochastic : predict_weight
     res = @chain scaling begin
         DataFramesMeta.@transform(
-            :age = age_func.(:primary_length), 
-            :weight = weight_func.(:primary_length))
+            :age = predict_age.(:primary_length, stochastic), 
+            :weight = predict_weight.(:primary_length))
         DataFramesMeta.@transform(:age = lpad.(string.(:age), 2, "0"))
         @by(:age, :weight = mean(:weight))
     end
@@ -246,6 +266,8 @@ function ATSurveyData(acoustics, scaling, trawl_locations, domain)
 end
 
 @kwdef struct BootSpecs
+    predict_ts::Bool=true
+    predict_weight::Bool=true
     resample_scaling::Bool=true
     get_trawl_means::Bool=true
     jackknife_trawl::Bool=true
@@ -283,6 +305,10 @@ function simulate(atbp, surveydata; nreplicates=500, bs=bs())
     println("Bootstrapping...")
     results = @showprogress map(1:nreplicates) do i
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
+
+        scaling_boot = DataFramesMeta.@transform(scaling_boot,
+            :sigma_bs = exp10.(predict_ts.(:ts_length, bs.predict_ts)/10))
+
         trawl_means = get_trawl_means(scaling_boot, trawl_locations, bs.get_trawl_means)
         if bs.jackknife_trawl
             popat!(trawl_means, rand(1:nrow(trawl_means)))
@@ -293,6 +319,8 @@ function simulate(atbp, surveydata; nreplicates=500, bs=bs())
         end
         age_comp = proportion_at_age(scaling_boot, stochastic=bs.proportion_at_age)
         age_weights = weights_at_age(scaling, stochastic=bs.weights_at_age)
+        @assert ! any(ismissing, age_weights.weight)
+        @assert nrow(age_weights) == 11
         ii = trawl_assignments_rand(coordinates.(surveydomain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
@@ -332,7 +360,7 @@ function stepwise_error_removal(class_problems, surveydata; kwargs...)
     error_sources = string.(fieldnames(BootSpecs))
     results = map(eachindex(error_sources)) do i
         println("\nLeaving out $(error_sources[i]) ($(i)/$(length(error_sources)))...")
-        errs = fill(true, 8)
+        errs = fill(true, length(error_sources))
         errs[i] = false
         bs = BootSpecs(errs...)
         res = simulate_classes(class_problems, surveydata; bs, kwargs...)
