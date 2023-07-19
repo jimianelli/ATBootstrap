@@ -21,7 +21,7 @@ function define_conditional_sim(acoustics, surveydomain, maxlag=200.0)
     geonasc.nasc .+= 1e-3
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
-    evg = EmpiricalVariogram(geonasc, :nasc, nlags=10, maxlag=maxlag)
+    evg = EmpiricalVariogram(geonasc, :nasc, nlags=20, maxlag=maxlag)
     tvg = fit(ExponentialVariogram, evg)
     prob = SimulationProblem(geonasc, surveydomain, :nasc => Float64, 1)
     variogram = (empirical = evg, model = tvg)
@@ -125,23 +125,34 @@ function choose_distribution(distributions, nasc, lungs_params; nreplicates=500,
     return dist_fits.distribution[argmin(dist_fits.mean_kld)]    
 end
 
-function predict_ts(L, stochastic=false)
-    TS = -66 + 20log10(L)
-    if stochastic
-        return TS + 0.14*randn() # standard error from Lauffenburger et al. 2023
-    end
-    return TS
-end
+# function predict_ts(L, stochastic=false)
+#     TS = -66 + 20log10(L)
+#     if stochastic
+#         return TS + 0.14*randn() # standard error from Lauffenburger et al. 2023
+#     end
+#     return TS
+# end
 
-function predict_weight(L, stochastic=false)
-    W = 1e-5 * L^2.9
-    if stochastic
-        return W * (1 + 0.05 * randn())
-    end
-    return W
-end
-# predict_weight_stochastic(L) = predict_weight(L) * (1 + 0.05 * randn())
+# function make_ts_function(stochastic=false)
+#     err = stochastic ? 0.14 * randn() : 0.0
+#     predict_ts(L) = -66 + 20log10(L) + err
+#     return predict_ts
+# end
+include("mace_ts.jl")
 
+# function predict_weight(L, stochastic=false)
+#     W = 1e-5 * L^2.9
+#     if stochastic
+#         return W * (1 + 0.05 * randn())
+#     end
+#     return W
+# end
+
+function make_weight_function(stochastic=false, sd=0.05)
+    err = stochastic ? (1 + sd*randn()) : 1.0
+    predict_weight(L) = (1e-5 * L^2.9) * err
+    return predict_weight
+end
 
 # Numbers from Matta and Kimura 2012, Age determination manual
 const L∞ = 67.33 # mm
@@ -207,10 +218,8 @@ function resample_scaling(df, stochastic=true)
         DataFramesMeta.groupby(df, [:event_id, :class]))
 end
 
-function get_trawl_means(scaling, trawl_locations, stochastic=false)
+function get_trawl_means(scaling, trawl_locations)
     trawl_means = @chain scaling begin
-        # DataFramesMeta.@transform(:sigma_bs = exp10.(ts.(:ts_length)/10),
-        #                           :weight = weight.(:primary_length))
         @by(:event_id, 
             :sigma_bs = mean(:sigma_bs, Weights(:w)),
             :sigma_bs_std = std(:sigma_bs, Weights(:w)),
@@ -221,26 +230,31 @@ function get_trawl_means(scaling, trawl_locations, stochastic=false)
     return trawl_means
 end
 
-function weights_at_age(scaling; age_max=AGE_MAX, stochastic=false)
+function make_all_ages(age_max)
+    all_ages = @chain Iterators.product(unique(scaling.event_id), 0:age_max) begin
+        DataFrame()
+        rename([:event_id, :age])
+        sort()
+    end
+end
+
+function weights_at_age(scaling, all_ages, stochastic=false)
+    predict_weight = make_weight_function(stochastic)
     res = @chain scaling begin
         DataFramesMeta.@transform(
-            :age = predict_age.(:primary_length, stochastic), 
+            # :age = predict_age.(:primary_length, stochastic), 
             :weight = predict_weight.(:primary_length))
+        rightjoin(all_ages, on=[:event_id, :age])
+        DataFramesMeta.@transform(:weight = replace(:weight, missing => 0.0))
         DataFramesMeta.@transform(:age = lpad.(string.(:age), 2, "0"))
         @by(:age, :weight = mean(:weight))
     end
     return res
 end
 
-function proportion_at_age(scaling; age_max=AGE_MAX, stochastic=false)
-    age = stochastic ? predict_age_stochastic : predict_age
-    all_ages = @chain Iterators.product(unique(scaling.event_id), 0:age_max) begin
-        DataFrame()
-        rename([:event_id, :age])
-        sort()
-    end
+function proportion_at_age(scaling, all_ages; age_max=AGE_MAX)#, stochastic=false)
     age_comp = @chain scaling begin
-        DataFramesMeta.@transform(:age = age.(:primary_length))
+        # DataFramesMeta.@transform(:age = predict_age.(:primary_length, stochastic))
         @by([:event_id, :age], :p_age=sum(:w))
         DataFrames.groupby(:event_id)
         DataFramesMeta.@transform(:p_age = :p_age / sum(:p_age))
@@ -267,16 +281,15 @@ end
 
 @kwdef struct BootSpecs
     predict_ts::Bool=true
-    predict_weight::Bool=true
     resample_scaling::Bool=true
-    get_trawl_means::Bool=true
     jackknife_trawl::Bool=true
-    proportion_at_age::Bool=true
+    age_length::Bool=true
     weights_at_age::Bool=true
     trawl_assignments::Bool=true
     nonneg_lusim::Bool=true
     calibration::Bool=true
 end
+BootSpecs(b::Bool) = BootSpecs(fill(b, length(fieldnames(BootSpecs)))...)
 
 function ATBootstrapProblem(surveydata, class, cal_error, dA;
         zdist_candidates=zdist_candidates)
@@ -294,7 +307,7 @@ function solution_domain(atbp, variable=:nasc)
     return domain(sol)
 end
 
-function simulate(atbp, surveydata; nreplicates=500, bs=bs())
+function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE_MAX)
     acoustics, scaling, trawl_locations, scaling_classes = surveydata
     class, variogram, problem, params, optimal_dist, zdists, cal_error, dA = atbp
     println(class)
@@ -306,10 +319,12 @@ function simulate(atbp, surveydata; nreplicates=500, bs=bs())
     results = @showprogress map(1:nreplicates) do i
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
 
+        predict_ts = make_ts_function(bs.predict_ts)
         scaling_boot = DataFramesMeta.@transform(scaling_boot,
-            :sigma_bs = exp10.(predict_ts.(:ts_length, bs.predict_ts)/10))
+            :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length)/10),
+            :age = predict_age.(:primary_length, bs.age_length))
 
-        trawl_means = get_trawl_means(scaling_boot, trawl_locations, bs.get_trawl_means)
+        trawl_means = get_trawl_means(scaling_boot, trawl_locations)
         if bs.jackknife_trawl
             popat!(trawl_means, rand(1:nrow(trawl_means)))
         end
@@ -317,10 +332,13 @@ function simulate(atbp, surveydata; nreplicates=500, bs=bs())
             @select(:x, :y, :ts, :length) 
             georef((:x, :y))
         end
-        age_comp = proportion_at_age(scaling_boot, stochastic=bs.proportion_at_age)
-        age_weights = weights_at_age(scaling, stochastic=bs.weights_at_age)
+        all_ages = make_all_ages(age_max)
+        age_comp = proportion_at_age(scaling_boot, all_ages)
+        age_weights = weights_at_age(scaling_boot, all_ages, bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
-        @assert nrow(age_weights) == 11
+        if nrow(age_weights) != AGE_MAX+1 
+            println("nrow=$(nrow(age_weights))")
+        end
         ii = trawl_assignments(coordinates.(surveydomain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
@@ -356,12 +374,14 @@ function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSp
     return results
 end
 
-function stepwise_error_removal(class_problems, surveydata; kwargs...)
+function stepwise_error(class_problems, surveydata; remove=true, kwargs...)
     error_sources = string.(fieldnames(BootSpecs))
+    colname = remove ? :eliminated_error : :added_error
     results = map(eachindex(error_sources)) do i
-        println("\nLeaving out $(error_sources[i]) ($(i)/$(length(error_sources)))...")
-        errs = fill(true, length(error_sources))
-        errs[i] = false
+        prefix = remove ? "Omitting" : "Adding"
+        println("\n$(prefix) $(error_sources[i]) ($(i)/$(length(error_sources)))...")
+        errs = fill(remove, length(error_sources))
+        errs[i] = !remove
         bs = BootSpecs(errs...)
         res = simulate_classes(class_problems, surveydata; bs, kwargs...)
         res[!, :eliminated_error] .= error_sources[i]
