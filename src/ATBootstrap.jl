@@ -1,4 +1,5 @@
-# module ATBootstrap
+module ATBootstrap
+
 using CSV, DataFrames, DataFramesMeta
 using GeoStats, GeoStatsPlots
 using Statistics, StatsBase
@@ -7,6 +8,17 @@ using LinearAlgebra
 using Distances
 using NearestNeighbors
 using ProgressMeter
+
+export read_survey_files,
+    ATSurveyData,
+    ATBootstrapProblem,
+    nonneg_lusim,
+    nonneg_lusim!,
+    nonneg_lumult,
+    nonneg_lumult!,
+    solution_domain,
+    simulate_classes,
+    stepwise_error
 
 # struct SurveyData
 #     acoustics
@@ -94,7 +106,7 @@ end
 
 function compare_distributions(distributions, nasc, lungs_params; nreplicates=500, verbose=false)
     bin_edges = [0; 2 .^ (0:14)]
-    h_nasc = normalize(fit(StatsBase.Histogram, acoustics.nasc, bin_edges), mode=:density)
+    h_nasc = normalize(fit(StatsBase.Histogram, nasc, bin_edges), mode=:density)
     fit_list = []
     for Dist in distributions
         if verbose
@@ -125,28 +137,7 @@ function choose_distribution(distributions, nasc, lungs_params; nreplicates=500,
     return dist_fits.distribution[argmin(dist_fits.mean_kld)]    
 end
 
-# function predict_ts(L, stochastic=false)
-#     TS = -66 + 20log10(L)
-#     if stochastic
-#         return TS + 0.14*randn() # standard error from Lauffenburger et al. 2023
-#     end
-#     return TS
-# end
-
-# function make_ts_function(stochastic=false)
-#     err = stochastic ? 0.14 * randn() : 0.0
-#     predict_ts(L) = -66 + 20log10(L) + err
-#     return predict_ts
-# end
 include("mace_ts.jl")
-
-# function predict_weight(L, stochastic=false)
-#     W = 1e-5 * L^2.9
-#     if stochastic
-#         return W * (1 + 0.05 * randn())
-#     end
-#     return W
-# end
 
 function make_weight_function(stochastic=false, sd=0.05)
     err = stochastic ? (1 + sd*randn()) : 1.0
@@ -230,12 +221,10 @@ function get_trawl_means(scaling, trawl_locations)
     return trawl_means
 end
 
-function make_all_ages(age_max)
-    all_ages = @chain Iterators.product(unique(scaling.event_id), 0:age_max) begin
-        DataFrame()
-        rename([:event_id, :age])
-        sort()
-    end
+function make_all_ages(scaling, age_max)
+    return allcombinations(DataFrame, 
+        event_id = unique(scaling.event_id), 
+        age = 0:age_max)
 end
 
 function weights_at_age(scaling, all_ages, stochastic=false)
@@ -332,14 +321,14 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
             @select(:x, :y, :ts, :length) 
             georef((:x, :y))
         end
-        all_ages = make_all_ages(age_max)
+        all_ages = make_all_ages(scaling_boot, age_max)
         age_comp = proportion_at_age(scaling_boot, all_ages)
         age_weights = weights_at_age(scaling_boot, all_ages, bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
         if nrow(age_weights) != AGE_MAX+1 
             println("nrow=$(nrow(age_weights))")
         end
-        ii = trawl_assignments(coordinates.(surveydomain), 
+        ii = trawl_assignments(coordinates.(surveydata.domain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
         nasc = bs.nonneg_lusim ? nonneg_lusim(atbp) : nonneg_lumult(params, z0)
@@ -396,11 +385,11 @@ function read_survey_files(surveydir)
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
     scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
-    surveydomain = shuffle(surveydomain) # this seems to fix the issue with directional artifacts
+    surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
     surveydomain =  PointSet(Matrix(surveydomain)')
     return (;acoustics, scaling, trawl_locations, surveydomain)
 end
 
 
 
-# end # module
+end # module
