@@ -1,9 +1,9 @@
 
 TSSpec(f, s) = (;f, s)
 
+const TS_SE_DEFAULT = 3.0
 
-
-function krill_ts(L)
+function euphausiids_15_65mm_38khz(L)
     A = -9.30429983e2
     B = 3.21027896e0
     C = 1.74003785e0
@@ -37,7 +37,7 @@ function krill_ts(L)
         L = L / 100
 
         #  Demer and Conti, 2006, Vol 63: 928-935, Eq. 10
-        TS = (A * (math.log10(B * k * L) / (B * k * L))^C +
+        TS = (A * (log10(B * k * L) / (B * k * L))^C +
               D * ((k * L)^6) +
               E * ((k * L)^5) +
               F * ((k * L)^4) +
@@ -49,30 +49,47 @@ function krill_ts(L)
     return TS
 end
 
+age0_pollock_ts(L) = 20log10(L) - 64.86
+arctic_cod_ts(L) = 8.03log10(L) - 60.78
+capelin_ts(L) = 20log10(L) - 70.3
+chrysaora_melanaster_ts(L) = 10log10(π * (2L)^2) - 86.8
+eulachon_ts(L) = 20log10(L) - 84.5
+eulachon_new_ts(L) = 20log10(L) - 84.5
+generalized_physoclist_ts(L) = 20log10(L) - 67.4
+generic_fish_no_swimbladder_ts(L) = 20log10(L) - 83.2
+generic_swimbladder_fish_ts(L) = generalized_physoclist_ts(L)
+herring_75m_v2_ts(L) = 20log10(L) - log10(1+75/10) - 65.4
+myctophids_sleucopsarus_ts(L) = 32.1log(log10(L)) - 64.1
+pacific_hake_ts(L) = 20log10(L) - 68.0
+sandlance_ts(L) = 56.5log10(L) - 125.1
+squids_ts(L) = 20log10(L) - 75.4
+standard_pollock_ts(L) = 20log10(L) - 66
 
-ts_lookup = Dict(                          # TS function (38 kHz, length in cm)     stdev
-    "age0_pollock" =>               TSSpec(L -> 20log10(L) - 64.86,                 1.0),
-    "arctic_cod" =>                 TSSpec(L -> 8.03log10(L) - 60.78,               1.0),
-    "capelin" =>                    TSSpec(L -> 20log10(L) - 70.3,                  1.0),
-    "chrysaora_melanaster" =>       TSSpec(L -> 10log10(π * (2L)^2) - 86.8,         1.0),
-    "eulachon" =>                   TSSpec(L -> 20log10(L) - 84.5,                  1.0),
-    "eulachon_new" =>               TSSpec(L -> 20log10(L) - 84.5,                  1.0),
-    "euphausiids_15_65mm_38khz" =>  TSSpec(krill_ts,                                1.0),
-    "generalized_physoclist" =>     TSSpec(L -> 20log10(L) - 67.4,                  1.0),
-    "generic_fish_no_swimbladder" =>TSSpec(L -> 20log10(L) - 83.2,                  1.0),
-    "generic_swimbladder_fish" =>   TSSpec(L -> 20log10(L) - 67.4,                  1.0),
-    "herring_75m_v2" =>             TSSpec(L -> 20log10(L) - log10(1+75/10) - 65.4, 1.0),
-    "myctophids_sleucopsarus" =>    TSSpec(L -> 32.1log(log10(L)) - 64.1,           1.0),
-    "pacific_hake" =>               TSSpec(L -> 20log10(L) - 68.0,                  1.0),
-    "sandlance" =>                  TSSpec(L -> 56.5log10(L) - 125.1,               1.0),
-    "squids" =>                     TSSpec(L -> 20log10(L) - 75.4,                  1.0),
-    "standard_pollock" =>           TSSpec(L -> 20log10(L) - 66,                    0.14),
+ts_lookup = Dict(                   # TS function (38 kHz, length in cm)    stdev
+    "age0_pollock" =>               TSSpec(age0_pollock_ts,                 TS_SE_DEFAULT),
+    "arctic_cod" =>                 TSSpec(arctic_cod_ts,                   TS_SE_DEFAULT),
+    "capelin" =>                    TSSpec(capelin_ts,                      TS_SE_DEFAULT),
+    "chrysaora_melanaster" =>       TSSpec(chrysaora_melanaster_ts,         TS_SE_DEFAULT),
+    "eulachon" =>                   TSSpec(eulachon_ts,                     TS_SE_DEFAULT),
+    "eulachon_new" =>               TSSpec(eulachon_new_ts,                 TS_SE_DEFAULT),
+    "euphausiids_15_65mm_38khz" =>  TSSpec(euphausiids_15_65mm_38khz,       TS_SE_DEFAULT),
+    "generalized_physoclist" =>     TSSpec(generalized_physoclist_ts,       TS_SE_DEFAULT),
+    "generic_fish_no_swimbladder" =>TSSpec(generic_fish_no_swimbladder_ts,  TS_SE_DEFAULT),
+    "generic_swimbladder_fish" =>   TSSpec(generic_swimbladder_fish_ts,     TS_SE_DEFAULT),
+    "herring_75m_v2" =>             TSSpec(herring_75m_v2_ts,               TS_SE_DEFAULT),
+    "myctophids_sleucopsarus" =>    TSSpec(myctophids_sleucopsarus_ts,      TS_SE_DEFAULT),
+    "pacific_hake" =>               TSSpec(pacific_hake_ts,                 TS_SE_DEFAULT),
+    "sandlance" =>                  TSSpec(sandlance_ts,                    TS_SE_DEFAULT),
+    "squids" =>                     TSSpec(squids_ts,                       TS_SE_DEFAULT),
+    "standard_pollock" =>           TSSpec(standard_pollock_ts,             0.14),
 )
 
 function make_ts_function(stochastic=false)
+    error_dict = Dict(k => randn() * ts_lookup[k].s for k in keys(ts_lookup))
+    
     function predict_ts(relationship, L)
         f, s = ts_lookup[relationship]
-        err = stochastic ? s * randn() : 0.0
+        err = stochastic ? error_dict[relationship] : 0.0
         f(L) + err
     end
     return predict_ts
