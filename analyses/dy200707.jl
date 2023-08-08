@@ -10,7 +10,7 @@ using Revise
 includet(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 using .ATBootstrap
 
-survey = "201006"
+survey = "200707"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
 const km2nmi = 1 / 1.852
@@ -139,6 +139,5 @@ p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
     outliers=false, title=survey, ylabel="C.V. (Numbers)");
 p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
     outliers=false, ylabel="C.V. (Biomass)");
-plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.15),
+plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.25),
     ylabel="Error source")
-
