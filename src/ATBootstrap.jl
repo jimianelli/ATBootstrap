@@ -1,6 +1,6 @@
 module ATBootstrap
 
-using CSV, DataFrames, DataFramesMeta
+using CSV, DataFrames, DataFramesMeta, CategoricalArrays
 using GeoStats, GeoStatsPlots
 using Statistics, StatsBase
 using Distributions
@@ -12,13 +12,16 @@ using ProgressMeter
 export read_survey_files,
     ATSurveyData,
     ATBootstrapProblem,
+    resample_df,
     nonneg_lusim,
     nonneg_lusim!,
     nonneg_lumult,
     nonneg_lumult!,
     solution_domain,
     simulate_classes,
-    stepwise_error
+    stepwise_error,
+    BootSpecs,
+    error_labels
 
 # struct SurveyData
 #     acoustics
@@ -34,7 +37,7 @@ function define_conditional_sim(acoustics, surveydomain, maxlag=200.0)
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
     evg = EmpiricalVariogram(geonasc, :nasc, nlags=20, maxlag=maxlag)
-    tvg = fit(ExponentialVariogram, evg)
+    tvg = fit(ExponentialVariogram, evg, h -> 1/h)
     prob = SimulationProblem(geonasc, surveydomain, :nasc => Float64, 1)
     variogram = (empirical = evg, model = tvg)
     return (variogram, prob)
@@ -194,7 +197,7 @@ function trawl_assignments(pixel_coords, trawl_coords, stochastic=true)
     return assignments
 end
 
-function resample_df(df, stochastic)
+function resample_df(df, stochastic=true)
     n = nrow(df)
     if stochastic
         ii = sample(1:n, n)
@@ -299,12 +302,11 @@ end
 function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE_MAX)
     acoustics, scaling, trawl_locations, scaling_classes = surveydata
     class, variogram, problem, params, optimal_dist, zdists, cal_error, dA = atbp
-    println(class)
     scaling_sub = @subset(scaling, :class .== class)
 
-    z0 = rand.(zdists)
+    z0 = mean.(zdists)
 
-    println("Bootstrapping...")
+    println("Bootstrapping $(class)...")
     results = @showprogress map(1:nreplicates) do i
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
 
@@ -351,6 +353,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
         end
         return df
     end
+
     return vcat(results...)
 end
 
@@ -373,12 +376,23 @@ function stepwise_error(class_problems, surveydata; remove=true, kwargs...)
         errs[i] = !remove
         bs = BootSpecs(errs...)
         res = simulate_classes(class_problems, surveydata; bs, kwargs...)
-        res[!, :eliminated_error] .= error_sources[i]
+        res[!, colname] .= error_sources[i]
         res
     end
     return vcat(results...)
 end
 
+# Ordered, categorical labels for stepwise error results
+error_labels = DataFrame(
+    added_error = ["calibration", "nonneg_lusim", "jackknife_trawl", "trawl_assignments",
+        "resample_scaling", "weights_at_age", "predict_ts", "age_length", "All"],
+    error_label = CategoricalArray(
+        ["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
+        "Resample catches", "Length-weight", "TS models", "Age-length", "All"],
+        levels=["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
+        "Resample catches", "Length-weight", "TS models", "Age-length", "All"]
+    )
+)
 
 function read_survey_files(surveydir)
     acoustics = CSV.read(joinpath(surveydir, "acoustics_projected.csv"), DataFrame)
