@@ -6,9 +6,9 @@ library(stringr)
 afsc <- dbConnect(odbc(), "AFSC", UID="urmys", PWD="SU_Mar_23Welcome")
 
 
-SURVEY = 201608
-DATA_SET_ID = 2
-ANALYSIS_ID = 1
+SURVEY = 200707
+DATA_SET_ID = 1
+ANALYSIS_ID = 3
 
 
 zonemin = 1
