@@ -31,13 +31,14 @@ export read_survey_files,
 
 const zdist_candidates = [Gamma, InverseGamma, InverseGaussian, LogNormal]
 
-function define_conditional_sim(acoustics, surveydomain, maxlag=200.0)
+function define_conditional_sim(acoustics, surveydomain; maxlag=200.0, 
+        nlags=20, weightfunc=h -> 1/h)
     geonasc = acoustics[!, [:nasc, :x, :y]]
     geonasc.nasc .+= 1e-3
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
-    evg = EmpiricalVariogram(geonasc, :nasc, nlags=20, maxlag=maxlag)
-    tvg = fit(ExponentialVariogram, evg, h -> 1/h)
+    evg = EmpiricalVariogram(geonasc, :nasc, nlags=nlags, maxlag=maxlag)
+    tvg = fit(ExponentialVariogram, evg, weightfunc)
     prob = SimulationProblem(geonasc, surveydomain, :nasc => Float64, 1)
     variogram = (empirical = evg, model = tvg)
     return (variogram, prob)
@@ -284,9 +285,10 @@ end
 BootSpecs(b::Bool) = BootSpecs(fill(b, length(fieldnames(BootSpecs)))...)
 
 function ATBootstrapProblem(surveydata, class, cal_error, dA;
-        zdist_candidates=zdist_candidates)
+        zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h)
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
-    variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain)
+    variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain,
+        maxlag=maxlag, nlags=nlags, weightfunc=weightfunc)
     params = get_lungs_params(problem, variogram.model)
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
