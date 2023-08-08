@@ -8,6 +8,7 @@ using StatsPlots, StatsPlots.PlotMeasures
 
 using Revise
 includet(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
+using .ATBootstrap
 
 survey = "201207"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
@@ -57,7 +58,7 @@ unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
 results = simulate_classes(class_problems, surveydata)
-results = @subset(results, :age .!= "00")
+# results = @subset(results, :age .!= "00")
 CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
 @df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
@@ -67,15 +68,6 @@ CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
 @df results boxplot(:age, :n_age/1e9, group=:age, palette=:Paired_10,
     xlabel="Age class", ylabel="Abundance (billions)")
-
-@chain results begin
-    @orderby(:age)
-    @by(:age, 
-        :n_age = mean(:n_age),
-        :std_age = std(:n_age), 
-        :cv_age = std(:n_age) / mean(:n_age) * 100)
-end
-
 
 @df results density(:biomass_age/1e9, group=:age, #xlims=(0, 4),
     fill=true, alpha=0.7, ylims=(0, 50), palette=:Paired_10,
@@ -92,19 +84,52 @@ results_summary = @chain results begin
         :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
 end
 
-results_step = stepwise_error_removal(class_problems, surveydata; nreplicates = 1000)
-results_step = @subset(results_step, :age .!= "00")
+results_step = stepwise_error(class_problems, surveydata; remove=false, nreplicates = 500)
+# results_step = @subset(results_step, :age .!= "00")
 
 stepwise_summary = @chain results_step begin
     @orderby(:age)
-    @by([:eliminated_error, :age], 
+    @by([:added_error, :age], 
         :biomass_age = mean(:biomass_age),
         :std_age = std(:biomass_age), 
         :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
+    leftjoin(select(results_summary, [:age, :std_age]), on=:age, makeunique=true)
+    DataFramesMeta.@transform(:std_decrease = :std_age ./ :std_age_1)
 end
 
-@df stepwise_summary plot(:age, :std_age, group=:eliminated_error, marker=:o, 
-    markerstrokewidth=0, size=(800, 600),
+@df stepwise_summary plot(:age, :std_age, group=:added_error, marker=:o, 
+    markerstrokewidth=0, size=(800, 600),# yscale=:log10,
     xlabel="Age class", ylabel="C.V. (%)", title=survey)
 @df results_summary plot!(:age, :std_age, linewidth=2, marker=:o, label="None", 
     color=:black)
+
+stepwise_totals = @by(results_step, [:added_error, :i], 
+    :n = sum(:n_age), 
+    :biomass = sum(:biomass_age))
+results_totals = @by(results, :i, 
+    :n = sum(:n_age), 
+    :biomass = sum(:biomass_age),
+    :added_error = "All")
+
+results_totals = @chain [results_totals; stepwise_totals] begin
+    leftjoin(error_labels, on=:added_error)
+end
+CSV.write("analyses/stepwise_error_$(survey).csv", results_totals)
+
+@df results_totals boxplot(:error_label, :n)
+
+stds_boot = map(1:1000) do i
+    df = resample_df(results_totals)
+    @by(df, :error_label, 
+        :n_cv = iqr(:n) / mean(:n) ,
+        :biomass_cv = iqr(:biomass) / mean(:biomass))
+end 
+stds_boot = vcat(stds_boot...)
+
+p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
+    outliers=false, title=survey, ylabel="C.V. (Numbers)");
+p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
+    outliers=false, ylabel="C.V. (Biomass)");
+plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.105),
+    ylabel="Error source")
+
