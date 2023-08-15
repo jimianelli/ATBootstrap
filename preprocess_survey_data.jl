@@ -5,7 +5,7 @@ using ConcaveHull
 using Statistics
 using LinearAlgebra
 
-surveydir = joinpath("surveydata", "201608")
+surveydir = joinpath("surveydata", "200707")
 scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
 scaling_classes = unique(scaling.class)
 
@@ -48,6 +48,14 @@ for i in 1:nrow(trawl_locations)
     trawl_locations[i, :edsu_idx] = argmin(norm.(y - s for s in acoustics.y))
 end
 
+length_weight = CSV.read(joinpath(surveydir, "measurements.csv"), DataFrame)
+rename!(lowercase, length_weight)
+length_weight = @chain length_weight begin
+    unstack([:specimen_id, :event_id], :measurement_type, :measurement_value)
+    dropmissing()
+end
+# @df length_weight scatter(:fork_length, :organism_weight)
+
 transect_ends = @chain acoustics begin
     @orderby(:y)
     @by(:transect, 
@@ -67,5 +75,6 @@ surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
     if in_hull([x, y], surveyhull)])
 
 CSV.write(joinpath(surveydir, "acoustics_projected.csv"), acoustics)
+CSV.write(joinpath(surveydir, "length_weight.csv"), length_weight)
 CSV.write(joinpath(surveydir, "trawl_locations_projected.csv"), trawl_locations)
 CSV.write(joinpath(surveydir, "surveydomain.csv"), surveydomain)

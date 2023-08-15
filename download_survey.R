@@ -3,7 +3,9 @@ library(glue)
 library(dplyr)
 library(stringr)
 
-afsc <- dbConnect(odbc(), "AFSC", UID="urmys", PWD="SU_Mar_23Welcome")
+uid = "urmys"
+pwd = readline(paste("Enter password for user", uid, ": "))
+afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
 
 
 SURVEY = 200707
@@ -103,6 +105,17 @@ download_trawl_locations <- function(connection, survey) {
   return(trawl_locations)
 }
 
+download_length_weight_measurements <- function(connection, survey) {
+  length_weight = dbGetQuery(connection,
+                               glue("SELECT *
+          FROM clamsbase2.measurements
+          WHERE
+          clamsbase2.measurements.survey = {survey}
+          AND (clamsbase2.measurements.measurement_type = 'fork_length'
+            OR clamsbase2.measurements.measurement_type = 'organism_weight');"))
+  return(length_weight)
+}
+
 
 fixlongitude <- function(lon) ifelse(lon > 0, -(360-lon), lon)
 lookup_survey_ship <- function(survey) ifelse(survey %in% c(200608, 200408), 21, 157)
@@ -147,11 +160,13 @@ trawl_locations <- trawl_locations %>%
   tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
 
 scaling <- download_scaling(afsc, SURVEY, DATA_SET_ID, ANALYSIS_ID)
+length_weight <- download_length_weight_measurements(afsc, SURVEY)
 acoustics <- download_acoustics(afsc, SURVEY)
 
 surveydir = paste0("surveydata/", SURVEY)
 dir.create(surveydir)
 write.csv(trawl_locations, paste0(surveydir, "/trawl_locations.csv"))
 write.csv(scaling, paste0(surveydir, "/scaling.csv"))
+write.csv(length_weight, paste0(surveydir, "/measurementsSU_.csv"))
 write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
 print(paste0("Downloaded survey ", SURVEY, "!"))
