@@ -143,12 +143,7 @@ end
 
 include("mace_ts.jl")
 include("mace_selectivity.jl")
-
-function make_weight_function(stochastic=false, sd=0.05)
-    err = stochastic ? (1 + sd*randn()) : 1.0
-    predict_weight(L) = (1e-5 * L^2.9) * err
-    return predict_weight
-end
+include("mace_length_weight.jl")
 
 # Numbers from Matta and Kimura 2012, Age determination manual
 const L∞ = 67.33 # mm
@@ -232,11 +227,10 @@ function make_all_ages(scaling, age_max)
         age = 0:age_max)
 end
 
-function weights_at_age(scaling, all_ages, stochastic=false)
-    predict_weight = make_weight_function(stochastic)
+function weights_at_age(scaling, length_weight, all_ages, stochastic=false)
+    predict_weight = make_weight_function(length_weight, stochastic)
     res = @chain scaling begin
         DataFramesMeta.@transform(
-            # :age = predict_age.(:primary_length, stochastic), 
             :weight = predict_weight.(:primary_length))
         rightjoin(all_ages, on=[:event_id, :age])
         DataFramesMeta.@transform(:weight = replace(:weight, missing => 0.0))
@@ -269,8 +263,8 @@ function simulate_cal_error(cal_error, stochastic=true)
     end
 end
 
-function ATSurveyData(acoustics, scaling, trawl_locations, domain)
-    return (;acoustics, scaling, trawl_locations, domain)
+function ATSurveyData(acoustics, scaling, length_weight, trawl_locations, domain)
+    return (;acoustics, scaling, length_weight, trawl_locations, domain)
 end
 
 @kwdef struct BootSpecs
@@ -304,7 +298,7 @@ function solution_domain(atbp, variable=:nasc)
 end
 
 function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE_MAX)
-    acoustics, scaling, trawl_locations, scaling_classes = surveydata
+    acoustics, scaling, length_weight, trawl_locations, scaling_classes = surveydata
     class, variogram, problem, params, optimal_dist, zdists, cal_error, dA = atbp
     scaling_sub = @subset(scaling, :class .== class)
 
@@ -332,7 +326,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
         end
         all_ages = make_all_ages(scaling_boot, age_max)
         age_comp = proportion_at_age(scaling_boot, all_ages)
-        age_weights = weights_at_age(scaling_boot, all_ages, bs.weights_at_age)
+        age_weights = weights_at_age(scaling_boot, length_weight, all_ages, bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
         if nrow(age_weights) != AGE_MAX+1 
             println("nrow=$(nrow(age_weights))")
@@ -408,10 +402,11 @@ function read_survey_files(surveydir)
     acoustics = CSV.read(joinpath(surveydir, "acoustics_projected.csv"), DataFrame)
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
     scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
+    length_weight = CSV.read(joinpath(surveydir, "length_weight.csv"), DataFrame)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
     surveydomain =  PointSet(Matrix(surveydomain)')
-    return (;acoustics, scaling, trawl_locations, surveydomain)
+    return (;acoustics, scaling, length_weight, trawl_locations, surveydomain)
 end
 
 
