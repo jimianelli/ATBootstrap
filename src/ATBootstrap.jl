@@ -82,8 +82,8 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
 
     println("Bootstrapping $(class)...")
     results = @showprogress map(1:nreplicates) do i
-        predict_selectivity = make_selectivity_function(bs.selectivity)
-        apply_selectivity!(scaling, predict_selectivity)
+        selectivity_function = make_selectivity_function(bs.selectivity)
+        apply_selectivity!(scaling, selectivity_function)
 
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
 
@@ -95,6 +95,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
         trawl_means = get_trawl_means(scaling_boot, trawl_locations)
         if bs.jackknife_trawl
             popat!(trawl_means, rand(1:nrow(trawl_means)))
+            # trawl_means = resample_df(trawl_means)
         end
         geotrawl_means = @chain trawl_means begin
             @select(:x, :y, :ts, :length) 

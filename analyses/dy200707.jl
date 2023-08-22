@@ -15,7 +15,8 @@ surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, trawl_locations, surveydomain = read_survey_files(surveydir)
+acoustics, scaling, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+scaling = DataFramesMeta.@transform(scaling, :sample_correction_scalar = float(:sample_correction_scalar))
 
 scaling_classes = unique(scaling.class)
 
@@ -31,13 +32,12 @@ end
 @df acoustics plot(:y, :nasc, group=:transect, legend=false)
 
 
-surveydata = ATSurveyData(acoustics, scaling, trawl_locations, surveydomain)
+surveydata = ATSurveyData(acoustics, scaling, length_weight, trawl_locations, surveydomain)
 
-cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
-    return ATBootstrapProblem(surveydata, class, cal_error, dA, nlags=15, weightfunc=h -> 1/h)
+    return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
 end
 
 pp = map(class_problems) do cp
@@ -139,5 +139,5 @@ p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
     outliers=false, title=survey, ylabel="C.V. (Numbers)");
 p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
     outliers=false, ylabel="C.V. (Biomass)");
-plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.25),
+plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.2),
     ylabel="Error source")
