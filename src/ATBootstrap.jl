@@ -27,7 +27,7 @@ export preprocess_survey_data,
 
 # struct SurveyData
 #     acoustics
-#     scaling
+#     scaling 
 #     trawl_locations
 # end
 
@@ -179,6 +179,7 @@ function read_survey_files(surveydir)
     acoustics = CSV.read(joinpath(surveydir, "acoustics_projected.csv"), DataFrame)
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
     scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
+    scaling = DataFramesMeta.@transform(scaling, :sample_correction_scalar = float(:sample_correction_scalar))
     length_weight = CSV.read(joinpath(surveydir, "length_weight.csv"), DataFrame)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
