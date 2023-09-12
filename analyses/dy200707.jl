@@ -16,7 +16,6 @@ resolution = 10.0 # km
 const km2nmi = 1 / 1.852
 
 acoustics, scaling, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
-scaling = DataFramesMeta.@transform(scaling, :sample_correction_scalar = float(:sample_correction_scalar))
 
 scaling_classes = unique(scaling.class)
 
