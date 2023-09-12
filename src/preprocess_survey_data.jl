@@ -6,7 +6,6 @@
 # using LinearAlgebra
 
 function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
-    # surveydir = joinpath("surveydata", "200707")
     scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
     scaling_classes = unique(scaling.class)
 
@@ -33,9 +32,6 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
-    # scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
-    # event_class = @by(scaling, :event_id, :class = length(unique(class))) # need to figure this out too
-
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations.csv"), DataFrame)
     rename!(lowercase, trawl_locations)
     trawl_locations = @chain trawl_locations begin
@@ -55,7 +51,6 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
         unstack([:specimen_id, :event_id], :measurement_type, :measurement_value)
         dropmissing()
     end
-    # @df length_weight scatter(:fork_length, :organism_weight)
 
     transect_ends = @chain acoustics begin
         @orderby(:y)
@@ -65,8 +60,6 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
     end
     v = [[row.x, row.y] for row in eachrow(transect_ends)]
     surveyhull = concave_hull(v, 20)
-    # @df acoustics scatter(:x, :y, aspect_ratio=:equal)
-    # plot!(surveyhull)
 
     dx = 10.0
     dy = 10.0

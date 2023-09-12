@@ -1,28 +1,30 @@
-# Numbers from Matta and Kimura 2012, Age determination manual
-const L∞ = 67.33 # mm
-const t₀ = -0.205
-const K = 0.1937
-const AGE_MAX = 10
-predict_length(t) = L∞ * (1 - exp(-K * (t - t₀)))
-function predict_age_deterministic(L, age_max=AGE_MAX)
-    if L < predict_length(age_max)
-        return round(Int, log(1 - L/L∞) / -K + t₀)
-    else
-       return age_max
-   end
-end
+# # Numbers from Matta and Kimura 2012, Age determination manual
+# const L∞ = 67.33 # mm
+# const t₀ = -0.205
+# const K = 0.1937
+# const AGE_MAX = 10
+# predict_length(t) = L∞ * (1 - exp(-K * (t - t₀)))
 
-function predict_age_stochastic(L, age_max=AGE_MAX)
-    return max(0, predict_age_deterministic(L + 2randn(), age_max))# + rand([-1, 0, 0, 0, 1]))
-end
 
-function predict_age(L, stochastic=true, age_max=AGE_MAX)
-    if stochastic
-        return predict_age_stochastic(L, age_max)
-    else
-        return predict_age_deterministic(L, age_max)
-    end
-end
+# function predict_age_deterministic(L, age_max=AGE_MAX)
+#     if L < predict_length(age_max)
+#         return round(Int, log(1 - L/L∞) / -K + t₀)
+#     else
+#        return age_max
+#    end
+# end
+
+# function predict_age_stochastic(L, age_max=AGE_MAX)
+#     return max(0, predict_age_deterministic(L + 2randn(), age_max))# + rand([-1, 0, 0, 0, 1]))
+# end
+
+# function predict_age(L, stochastic=true, age_max=AGE_MAX)
+#     if stochastic
+#         return predict_age_stochastic(L, age_max)
+#     else
+#         return predict_age_deterministic(L, age_max)
+#     end
+# end
 
 
 

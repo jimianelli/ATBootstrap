@@ -1,7 +1,7 @@
 module ATBootstrap
 
 using CSV, DataFrames, DataFramesMeta, CategoricalArrays
-using GeoStats, GeoStatsPlots
+using GeoStats, GeoStatsPlots, Geodesy, ConcaveHull
 using Statistics, StatsBase
 using Distributions
 using LinearAlgebra
@@ -34,13 +34,14 @@ export preprocess_survey_data,
 include("preprocess_survey_data.jl")
 include("spatial.jl")
 include("mace_ts.jl")
+include("mace_age_length.jl")
 include("mace_selectivity.jl")
 include("mace_length_weight.jl")
 include("calibration.jl")
 include("scaling.jl")
 
-function ATSurveyData(acoustics, scaling, length_weight, trawl_locations, domain)
-    return (;acoustics, scaling, length_weight, trawl_locations, domain)
+function ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, domain)
+    return (;acoustics, scaling, age_length, length_weight, trawl_locations, domain)
 end
 
 @kwdef struct BootSpecs
@@ -74,7 +75,7 @@ function solution_domain(atbp, variable=:nasc)
 end
 
 function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE_MAX)
-    acoustics, scaling, length_weight, trawl_locations, scaling_classes = surveydata
+    acoustics, scaling, age_length, length_weight, trawl_locations, scaling_classes = surveydata
     class, variogram, problem, params, optimal_dist, zdists, cal_error, dA = atbp
     scaling_sub = @subset(scaling, :class .== class)
 
@@ -88,9 +89,10 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
 
         predict_ts = make_ts_function(bs.predict_ts)
+        predict_age = make_age_length_function(age_length, age_max, bs.age_length)
         scaling_boot = DataFramesMeta.@transform(scaling_boot,
             :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length)/10),
-            :age = predict_age.(:primary_length, bs.age_length))
+            :age = predict_age.(:primary_length))
         
         trawl_means = get_trawl_means(scaling_boot, trawl_locations)
         if bs.jackknife_trawl
@@ -180,11 +182,12 @@ function read_survey_files(surveydir)
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
     scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
     scaling = DataFramesMeta.@transform(scaling, :sample_correction_scalar = float(:sample_correction_scalar))
+    age_length = CSV.read(joinpath(surveydir, "age_length.csv"), DataFrame)
     length_weight = CSV.read(joinpath(surveydir, "length_weight.csv"), DataFrame)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
     surveydomain =  PointSet(Matrix(surveydomain)')
-    return (;acoustics, scaling, length_weight, trawl_locations, surveydomain)
+    return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
 end
 
 
