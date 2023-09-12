@@ -3,20 +3,6 @@ library(glue)
 library(dplyr)
 library(stringr)
 
-uid = "urmys"
-pwd = readline(paste("Enter password for user", uid, ": "))
-afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
-
-
-SURVEY = 200707
-DATA_SET_ID = 1
-ANALYSIS_ID = 3
-
-
-zonemin = 1
-zonemax = 1
-transectmin = 1
-transectmax = 999
 
 
 cells_query <- function(survey, ship, datasetid, zonemax, zonemin) {
@@ -93,6 +79,7 @@ download_scaling <- function(connection, survey, datasetid, analysisid) {
 }
 
 download_trawl_locations <- function(connection, survey) {
+  print("Downloading trawl locations...")
   trawl_locations = dbGetQuery(connection,
                                glue("SELECT *
           FROM clamsbase2.event_data
@@ -106,6 +93,7 @@ download_trawl_locations <- function(connection, survey) {
 }
 
 download_length_weight_measurements <- function(connection, survey) {
+  print("Downloading length-weight measurements...")
   length_weight = dbGetQuery(connection,
                                glue("SELECT *
           FROM clamsbase2.measurements
@@ -116,6 +104,29 @@ download_length_weight_measurements <- function(connection, survey) {
   return(length_weight)
 }
 
+download_age_length_key <- function(connection, survey, data_set_id, analysis_id) {
+  print("Downloading age-length keys...")
+  age_length = dbGetQuery(connection,
+                               glue("SELECT *
+          FROM macebase2.age_length_key_data
+          WHERE
+          macebase2.age_length_key_data.survey = {survey}
+          AND macebase2.age_length_key_data.data_set_id = {data_set_id}
+          AND macebase2.age_length_key_data.analysis_id = {analysis_id};"))
+  age_length <- cleanup(age_length)
+  totals = age_length %>%
+    group_by(survey, length) %>%
+    summarize(ptotal = sum(proportion_in_key), .groups="drop")
+
+  age_length = age_length %>%
+    group_by(survey, age, length) %>%
+    summarize(proportion = sum(proportion_in_key), .groups="drop") %>%
+    left_join(totals, by=c("survey", "length")) %>%
+    mutate(proportion = proportion / ptotal) %>%
+    select(survey, length, age, proportion)
+
+  return(age_length)
+}
 
 fixlongitude <- function(lon) ifelse(lon > 0, -(360-lon), lon)
 lookup_survey_ship <- function(survey) ifelse(survey %in% c(200608, 200408), 21, 157)
@@ -123,7 +134,7 @@ ispollock <- function(class) substr(toupper(class), 1, 2) == "PK"
 
 
 download_acoustics <- function(connection, survey) {
-  print(glue("Fetching data from survey {survey}..."))
+  print("Downloading acoustic data...")
 
   datasetid = 1
   zonemin = 1
@@ -144,9 +155,9 @@ download_acoustics <- function(connection, survey) {
   cellsdata = left_join(cellsdata, intervalsdata, by=c("survey", "interval"))
 
   integrated = cellsdata %>%
-    # filter(ispollock(class)) %>%
+    filter(zone <= zonemax) %>%
     group_by(survey, transect, interval, class) %>%
-    summarize(nasc = sum(prc_nasc)) %>%
+    summarize(nasc = sum(prc_nasc), .groups="drop") %>%
     left_join(intervalsdata, by=c("survey", "interval", "transect")) %>%
     mutate(transect = round(transect))
   integrated$nasc[is.na(integrated$nasc)] <- 0
@@ -154,19 +165,42 @@ download_acoustics <- function(connection, survey) {
   return(integrated)
 }
 
-trawl_locations <- download_trawl_locations(afsc, SURVEY)
+download_survey <- function(connection, survey, data_set_id, analysis_id) {
+  print(glue("Fetching data from survey {survey}"))
+  trawl_locations <- download_trawl_locations(afsc, survey)
+  trawl_locations <- trawl_locations %>%
+    tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
+  scaling <- download_scaling(afsc, survey, data_set_id, analysis_id)
+  length_weight <- download_length_weight_measurements(afsc, survey)
+  # age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
+  acoustics <- download_acoustics(afsc, survey)
 
-trawl_locations <- trawl_locations %>%
-  tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
+  surveydir = paste0("surveydata/", survey)
+  dir.create(surveydir, showWarnings = FALSE)
+  write.csv(trawl_locations, paste0(surveydir, "/trawl_locations.csv"))
+  write.csv(scaling, paste0(surveydir, "/scaling.csv"))
+  write.csv(length_weight, paste0(surveydir, "/measurements.csv"))
+  # write.csv(age_length, paste0(surveydir, "/age_length.csv"))
+  write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
+  print(paste0("Downloaded survey ", survey, "!"))
+}
 
-scaling <- download_scaling(afsc, SURVEY, DATA_SET_ID, ANALYSIS_ID)
-length_weight <- download_length_weight_measurements(afsc, SURVEY)
-acoustics <- download_acoustics(afsc, SURVEY)
 
-surveydir = paste0("surveydata/", SURVEY)
-dir.create(surveydir)
-write.csv(trawl_locations, paste0(surveydir, "/trawl_locations.csv"))
-write.csv(scaling, paste0(surveydir, "/scaling.csv"))
-write.csv(length_weight, paste0(surveydir, "/measurementsSU_.csv"))
-write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
-print(paste0("Downloaded survey ", SURVEY, "!"))
+
+uid = "urmys"
+pwd = readline(paste("Enter password for user", uid, ": "))
+afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
+
+survey.specs <-data.frame(
+  survey = c(200707, 200809, 200909, 201006, 201207, 201407, 201608, 201807, 202207),
+  data_set_id = c(1, 1, 1, 1, 1, 1, 1, 1, 1),
+  analysis_id = c(3,      4,      4,      3,      5,      4,      4,      7,      1)
+)
+
+for (i in 1:nrow(survey.specs)) {
+  download_survey(afsc, 
+    survey.specs[i, "survey"], 
+    survey.specs[i, "data_set_id"], 
+    survey.specs[i, "analysis_id"])
+}
+# download_survey(afsc, SURVEY, DATA_SET_ID, ANALYSIS_ID)
