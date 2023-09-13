@@ -3,8 +3,6 @@ library(glue)
 library(dplyr)
 library(stringr)
 
-
-
 cells_query <- function(survey, ship, datasetid, zonemax, zonemin) {
   sql = glue("SELECT
       macebase2.integration_results.survey,
@@ -172,7 +170,7 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
     tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
   scaling <- download_scaling(afsc, survey, data_set_id, analysis_id)
   length_weight <- download_length_weight_measurements(afsc, survey)
-  # age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
+  age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
   acoustics <- download_acoustics(afsc, survey)
 
   surveydir = paste0("surveydata/", survey)
@@ -180,7 +178,7 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
   write.csv(trawl_locations, paste0(surveydir, "/trawl_locations.csv"))
   write.csv(scaling, paste0(surveydir, "/scaling.csv"))
   write.csv(length_weight, paste0(surveydir, "/measurements.csv"))
-  # write.csv(age_length, paste0(surveydir, "/age_length.csv"))
+  write.csv(age_length, paste0(surveydir, "/age_length.csv"))
   write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
   print(paste0("Downloaded survey ", survey, "!"))
 }
