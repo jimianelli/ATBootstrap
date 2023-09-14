@@ -84,9 +84,8 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
     println("Bootstrapping $(class)...")
     results = @showprogress map(1:nreplicates) do i
         selectivity_function = make_selectivity_function(bs.selectivity)
-        apply_selectivity!(scaling, selectivity_function)
-
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
+        apply_selectivity!(scaling_boot, selectivity_function)
 
         predict_ts = make_ts_function(bs.predict_ts)
         predict_age = make_age_length_function(age_length, age_max, bs.age_length)
