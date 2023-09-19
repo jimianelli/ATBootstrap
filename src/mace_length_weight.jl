@@ -16,11 +16,9 @@ function make_weight_function(length_weight, stochastic=true, nmin=10)
     model = lm(@formula(log(organism_weight) ~ log(fork_length)), length_weight_boot)
     c = DataFrame(coeftable(model))
     μloga = c[1,2]
-    σloga = c[1,3]
     μb = c[2,2]
-    σb = c[2,3]
-    a = stochastic ? exp(rand(Normal(μloga, σloga))) : exp(μloga)
-    b = stochastic ? rand(Normal(μb, σb)) : μb
+    a = exp(μloga)
+    b =  μb
     Lmax = round(Int, maximum(length_weight.fork_length))
     all_lengths = DataFrame(fork_length = 1:Lmax)
     binned = @chain length_weight_boot begin
