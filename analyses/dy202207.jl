@@ -13,9 +13,10 @@ using .ATBootstrap
 survey = "202207"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
+preprocess_survey_data(surveydir, resolution)
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
 
 unique(scaling.class)
 # Other classes appear to be extra transects...?
@@ -33,7 +34,7 @@ end
 @df trawl_locations scatter!(:x, :y, label="")
 
 
-surveydata = ATSurveyData(acoustics, scaling, length_weight, trawl_locations, surveydomain)
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
 
 cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2

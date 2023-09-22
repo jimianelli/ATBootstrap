@@ -12,10 +12,11 @@ using .ATBootstrap
 
 survey = "202304"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
-resolution = 2.0 # km
+resolution = 2.0 # k
+preprocess_survey_data(surveydir, resolution)
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, trawl_locations, surveydomain = read_survey_files(surveydir)
+acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
 
 unique(scaling.class)
 scaling_classes = ["SS1"]
@@ -53,13 +54,13 @@ surveydomain = PointSet(surveydomain)
 plot!(surveyhull)
 plot!(surveydomain, markersize=1)
 
-surveydata = ATSurveyData(acoustics, scaling, trawl_locations, surveydomain)
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
 
 cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
-    return ATBootstrapProblem(surveydata, class, cal_error, dA)
+    return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
 end
 
 pp = map(class_problems) do cp
@@ -87,7 +88,8 @@ plot(sim_plots..., size=(1000, 1000), margin=10px)
 unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
-results = simulate_classes(class_problems, surveydata, nreplicates = 1000)
+results = simulate_classes(class_problems, surveydata, nreplicates = 500)
+results = @subset(results, :age .!= "00")
 CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 
 @df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
@@ -98,7 +100,7 @@ CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
 @df @subset(results, :age .!= "00") violin(:age, :n_age/1e6, group=:age, palette=:Paired_10,
     xlabel="Age class", ylabel="Abundance (millions)", legend=:outerright)
 @df @subset(results, :age .!= "00") violin(:age, :biomass_age/1e6, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Biomass (Thousand tons)", legend=:outerright)
+    xlabel="Age class", ylabel="Biomass (Thousand tons)", legend=:outerright, size=(700, 500))
 
 std2(x) = diff(quantile(x, [0.25, 0.75]))
 results_summary = @chain results begin

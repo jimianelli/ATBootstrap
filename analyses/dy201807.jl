@@ -13,9 +13,10 @@ using .ATBootstrap
 survey = "201807"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
+preprocess_survey_data(surveydir, resolution)
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
 
 scaling_classes = unique(scaling.class)
 scaling_classes = ["PK1", "PK1_FILTERED"]
@@ -30,7 +31,11 @@ end
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
-surveydata = ATSurveyData(acoustics, scaling, length_weight, trawl_locations, surveydomain)
+length_weight = @chain length_weight begin
+    @subset(:organism_weight .!= ".")
+    DataFramesMeta.@transform(:organism_weight = parse.(Float64, :organism_weight))
+end
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
 
 cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2

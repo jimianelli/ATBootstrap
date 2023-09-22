@@ -13,9 +13,10 @@ using .ATBootstrap
 survey = "200707"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
+preprocess_survey_data(surveydir, resolution)
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
 
 scaling_classes = unique(scaling.class)
 
@@ -28,10 +29,10 @@ end
 @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
-@df acoustics plot(:y, :nasc, group=:transect, legend=false)
+# @df acoustics plot(:y, :nasc, group=:transect, legend=false)
 
 
-surveydata = ATSurveyData(acoustics, scaling, length_weight, trawl_locations, surveydomain)
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
 
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
@@ -138,5 +139,5 @@ p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
     outliers=false, title=survey, ylabel="C.V. (Numbers)");
 p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
     outliers=false, ylabel="C.V. (Biomass)");
-plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.2),
+plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.3),
     ylabel="Error source")
