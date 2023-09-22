@@ -48,7 +48,7 @@ end
     selectivity::Bool=true
     predict_ts::Bool=true
     resample_scaling::Bool=true
-    jackknife_trawl::Bool=true
+    drop_trawl::Bool=true
     age_length::Bool=true
     weights_at_age::Bool=true
     trawl_assignments::Bool=true
@@ -94,7 +94,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
             :age = predict_age.(:primary_length))
         
         trawl_means = get_trawl_means(scaling_boot, trawl_locations)
-        if bs.jackknife_trawl
+        if bs.drop_trawl
             popat!(trawl_means, rand(1:nrow(trawl_means)))
             # trawl_means = resample_df(trawl_means)
         end
@@ -123,7 +123,8 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
         df = @chain df begin
             leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
             leftjoin(age_comp, on=:event_id)
-            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]), variable_name=:age, value_name=:p_age)
+            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]), 
+                variable_name=:age, value_name=:p_age)
             DataFramesMeta.@transform(:n_age = :nasc ./ (4π * :sigma_bs) .* :p_age)
             @by(:age, 
                 :n_age = sum(skipmissing(:n_age)) * dA)
@@ -163,16 +164,19 @@ end
 
 # Ordered, categorical labels for stepwise error results
 error_labels = DataFrame(
-    added_error = ["calibration", "nonneg_lusim", "jackknife_trawl", "trawl_assignments",
-        "selectivity", "resample_scaling", "weights_at_age", "predict_ts", "age_length",
-        "All"],
+    added_error = ["calibration", "nonneg_lusim", "selectivity", "resample_scaling",
+        "drop_trawl", "trawl_assignments", "predict_ts", "age_length", "weights_at_age", "All"],
     error_label = CategoricalArray(
-        ["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
-        "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length",
-        "All"],
-        levels=["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
-        "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length",
-        "All"]
+        # ["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
+        # "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length",
+        # "All"],
+        # levels=["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
+        # "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length",
+        # "All"]
+        ["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
+        "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"],
+        levels=["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
+        "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"]
     )
 )
 
