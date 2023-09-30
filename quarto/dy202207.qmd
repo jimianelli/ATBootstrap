@@ -1,0 +1,125 @@
+---
+title: "Total uncertainty analysis of DY 202207 Survey"
+format:
+  html:
+    code-fold: true
+jupyter: julia-1.9
+---
+```{julia}
+#| echo: false
+#| output: false
+using Pkg
+Pkg.activate(joinpath(@__DIR__, ".."))
+```
+```{julia}
+#| echo: false
+using Markdown
+using Dates
+Markdown.parse("""
+Sam Urmy\n
+$(Dates.today())
+""")
+```
+
+
+```{julia}
+#| output: false
+using CSV, DataFrames, DataFramesMeta, CategoricalArrays
+using GeoStats, GeoStatsPlots
+using Statistics, StatsBase
+using Distributions
+using Random
+using ConcaveHull
+using StatsPlots, StatsPlots.PlotMeasures
+
+using Revise
+includet(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
+using .ATBootstrap
+
+survey = "202207"
+surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
+resolution = 10.0 # km
+preprocess_survey_data(surveydir, resolution)
+const km2nmi = 1 / 1.852
+
+acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+
+unique(scaling.class)
+# Other classes appear to be extra transects...?
+scaling_classes = ["SS1", "SS1_FILTERED"]
+acoustics = @subset(acoustics, in(scaling_classes).(:class))
+
+acoustics = @chain acoustics begin
+    @subset(in(scaling_classes).(:class), :transect .< 200)
+    DataFramesMeta.@transform(:x = round.(:x, digits=-1), :y = round.(:y, digits=-1))
+    @by([:transect, :class, :x, :y], 
+        :lon = mean(:lon), :lat = mean(:lat), :nasc = mean(:nasc))
+end
+```
+```{julia}
+#| echo: false
+Markdown.parse("""
+The summer 2022 eastern Bering Sea acoustic-trawl survey took place from DATE to DATE.
+Acoustic data were collected along $(length(unique(acoustics.transect))) north-south
+parallel transects at a spacing of 40 nmi. Targeted trawls were conducted at 
+$(nrow(trawl_locations)) locations along these transects for species and size
+identification and to collect biological data.
+""")
+```
+```{julia}
+@df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
+    markersize=:nasc/500, markerstrokewidth=0, alpha=0.5,
+    xlabel="Easting (km)", ylabel="Northing (km)")
+@df trawl_locations scatter!(:x, :y, label="")
+```
+```{julia}
+#| echo: false
+Markdown.parse("""
+This analysis was done for $(length(scaling_classes)) acoustic scaling classes:
+$(join(scaling_classes, ", ", " and ")). Acoustic backscatterd data in each class were
+averaged into square spatial bins $(resolution) km on a side. 
+
+Empirical variograms with a maximum lag of 200 km and 15 bins were calculated for the 
+acoustic data in each scaling class. Exponential variogram models were fit to the 
+empirical variograms.
+""")
+```
+```{julia}
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
+
+dA = (resolution * km2nmi)^2
+class_problems = map(scaling_classes) do class
+    # println(class)
+    return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
+end
+
+pp = map(class_problems) do cp
+    plot(cp.variogram.empirical, title=cp.class)
+    plot!(cp.variogram.model, xlims=(0, 200))
+end
+plot(pp..., size=(800, 400), margin=10px)
+```
+Based on the Kullback-Liebler distance between the observed and simulated
+backscatter distributions (averaged over 500 simulations), the driving distributions for 
+spatial simulations within each scaling class were as follows:
+
+```{julia}
+#| echo: false
+DataFrame(zip(scaling_classes, [cp.optimal_dist for cp in class_problems]), 
+  ["Scaling class", "Distribution"])
+```
+Two conditional backscatter simulations are shown below:
+```{julia}
+simdomain = solution_domain(class_problems[1])
+sim_fields = [nonneg_lusim(p) for p in class_problems]
+sim_plots = map(enumerate(sim_fields)) do (i, x)
+  plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
+          markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
+          markersize=2, xlabel="Easting (km)", ylabel="Northing (km)")
+      df = @subset(acoustics, :class .== scaling_classes[i])
+      scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
+          markerstrokewidth=0)
+end
+plot(sim_plots..., size=(800, 500))
+```
+
