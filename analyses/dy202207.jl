@@ -36,7 +36,6 @@ end
 
 surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
 
-cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
@@ -49,6 +48,17 @@ pp = map(class_problems) do cp
 end
 plot(pp..., size=(1000, 800))
 
+# Some analysis of variability in NASC
+/(quantile(acoustics.nasc[acoustics.nasc .> 0], [0.95, 0.05])...)
+x = sort(acoustics.nasc, rev=true)
+plot(cumsum(x) / sum(x))
+findfirst(cumsum(x) / sum(x) .> 0.5) / length(x)
+
+vgm = class_problems[1].variogram.model
+plot(h -> sqrt(vgm(h)) / mean(acoustics.nasc), 0, 100)
+vline!([7])
+sqrt(vgm(1.852 * 10)) / mean(acoustics.nasc)
+
 simdomain = solution_domain(class_problems[1])
 sim_fields = [nonneg_lusim(p) for p in class_problems]
 sim_plots = map(enumerate(sim_fields)) do (i, x)
@@ -60,16 +70,12 @@ sim_plots = map(enumerate(sim_fields)) do (i, x)
         markerstrokewidth=0)
 end
 plot(sim_plots..., size=(1000, 1000))
-# i = 1
-# x = nonneg_lusim(params[i], zdists[i])
-# plot(domain(sol), zcolor=x, markerstrokewidth=0, markershape=:square, clims=(0, quantile(x, 0.999)), 
-#     title=string(scaling_classes[i]), markersize=4.2, background_color=:black, 
-#     xlabel="Easting (km)", ylabel="Northing (km)", size=(1000, 1000))
 unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
 results = simulate_classes(class_problems, surveydata, nreplicates = 500)
-CSV.write(joinpath(@__DIR__, "results_$(survey).csv"), results)
+CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
+
 
 @df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
     fill=true, alpha=0.7, ylims=(0, 25), xlims=(0, 10), palette=:Paired_10,
@@ -93,8 +99,11 @@ end
     fill=true, alpha=0.7, ylims=(0, 10), palette=:Paired_10,
     xlabel="Million tons", ylabel="Probability density")
 
-@df results violin(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Million tons")
+p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Million tons", legend=false);
+p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Million tons");
+plot(p_abundance, p_biomass, size=(900, 400), margin=15px)
 
 
 # Testing out stepwise error removal
@@ -129,7 +138,7 @@ results_totals = @by(results, :i,
 results_totals = @chain [results_totals; stepwise_totals] begin
     leftjoin(error_labels, on=:added_error)
 end
-CSV.write("analyses/stepwise_error_$(survey).csv", results_totals)
+CSV.write(joinpath(@__DIR__, "results", "stepwise_error_$(survey).csv"), results_totals)
 
 @df results_totals boxplot(:error_label, :n)
 
