@@ -3,6 +3,8 @@ title: "Total uncertainty analysis of DY 202207 Survey"
 format:
   html:
     code-fold: true
+execute: 
+  cache: true
 jupyter: julia-1.9
 ---
 ```{julia}
@@ -21,6 +23,7 @@ $(Dates.today())
 """)
 ```
 
+## Introduduction
 
 ```{julia}
 #| output: false
@@ -76,12 +79,13 @@ identification and to collect biological data.
 #| echo: false
 Markdown.parse("""
 This analysis was done for $(length(scaling_classes)) acoustic scaling classes:
-$(join(scaling_classes, ", ", " and ")). Acoustic backscatterd data in each class were
+$(join(scaling_classes, ", ", " and ")). Acoustic backscatter data in each class were
 averaged into square spatial bins $(resolution) km on a side. 
 
 Empirical variograms with a maximum lag of 200 km and 15 bins were calculated for the 
 acoustic data in each scaling class. Exponential variogram models were fit to the 
-empirical variograms.
+empirical variograms, weighting the empirical variograms inversely proportional to the lag
+distance to acheive a more accurate fit at short ranges.
 """)
 ```
 ```{julia}
@@ -104,7 +108,6 @@ backscatter distributions (averaged over 500 simulations), the driving distribut
 spatial simulations within each scaling class were as follows:
 
 ```{julia}
-#| echo: false
 DataFrame(zip(scaling_classes, [cp.optimal_dist for cp in class_problems]), 
   ["Scaling class", "Distribution"])
 ```
@@ -113,13 +116,104 @@ Two conditional backscatter simulations are shown below:
 simdomain = solution_domain(class_problems[1])
 sim_fields = [nonneg_lusim(p) for p in class_problems]
 sim_plots = map(enumerate(sim_fields)) do (i, x)
-  plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
-          markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
-          markersize=2, xlabel="Easting (km)", ylabel="Northing (km)")
-      df = @subset(acoustics, :class .== scaling_classes[i])
-      scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
-          markerstrokewidth=0)
+    plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
+        markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
+        markersize=2, xlabel="Easting (km)", ylabel="Northing (km)")
+    df = @subset(acoustics, :class .== scaling_classes[i])
+    scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
+        markerstrokewidth=0)
 end
 plot(sim_plots..., size=(800, 500))
 ```
 
+## Uncertainty analysis results
+
+```{julia}
+#| output: false 
+nreplicates = 500
+results = simulate_classes(class_problems, surveydata, nreplicates = nreplicates)
+results = @subset(results, :age .!= "00")
+```
+```{julia}
+#| echo: false
+Markdown.parse("""
+After runing $nreplicates replicates of the bootstrapping procedure, we obtained the 
+following results.
+""")
+```
+
+### Numerical abundance
+
+Abundances and uncertainties, in billions of fish:
+```{julia}
+n_factor = 1e9
+abundance_summary = @chain results begin
+    @orderby(:age)
+     @by(:age, 
+        :Abundance = mean(:n_age) / n_factor,
+        :Std = std(:n_age) / n_factor, 
+        :CV = std(:n_age) / mean(:n_age) * 100)
+    @rename(:Age = :age)
+end
+```
+
+### Biomass
+
+Biomasses and uncertainties, in millions of tonnes:
+```{julia}
+b_factor = 1e9
+abundance_summary = @chain results begin
+    @orderby(:age)
+    @by(:age, 
+        :Biomass = mean(:biomass_age) / b_factor,
+        :Std = std(:biomass_age) / b_factor, 
+        :CV = std(:biomass_age) / mean(:biomass_age) * 100)
+    @rename(:Age = :age)
+end
+```
+
+```{julia}
+p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Million tons", legend=false);
+p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Million tons");
+plot(p_abundance, p_biomass, size=(750, 350), margin=15px)
+```
+
+## Individual error sources
+
+```{julia}
+#| output: false 
+results_step = stepwise_error(class_problems, surveydata; remove=false, 
+    nreplicates = nreplicates);
+```
+```{julia}
+#| output: false
+stepwise_totals = @by(results_step, [:added_error, :i], 
+    :n = sum(:n_age), 
+    :biomass = sum(:biomass_age))
+results_totals = @by(results, :i, 
+    :n = sum(:n_age), 
+    :biomass = sum(:biomass_age),
+    :added_error = "All")
+results_totals = @chain [results_totals; stepwise_totals] begin
+    leftjoin(error_labels, on=:added_error)
+end
+
+stds_boot = map(1:nreplicates) do i
+    df = resample_df(results_totals)
+    @by(df, :error_label, 
+        :n_cv = iqr(:n) / mean(:n) ,
+        :biomass_cv = iqr(:biomass) / mean(:biomass))
+end
+
+stds_boot = vcat(stds_boot...)
+```
+```{julia}
+p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
+    outliers=false, title=survey, ylabel="C.V. (Numbers)");
+p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
+    outliers=false, ylabel="C.V. (Biomass)");
+plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.20),
+    ylabel="Error source")
+```
