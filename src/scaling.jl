@@ -74,7 +74,7 @@ function weights_at_age(scaling, length_weight, all_ages, stochastic=false)
     return res
 end
 
-function proportion_at_age(scaling, all_ages; age_max=AGE_MAX)#, stochastic=false)
+function proportion_at_age(scaling, all_ages)#, stochastic=false)
     age_comp = @chain scaling begin
         # DataFramesMeta.@transform(:age = predict_age.(:primary_length, stochastic))
         @by([:event_id, :age], :p_age=sum(:w))

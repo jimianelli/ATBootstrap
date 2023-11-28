@@ -57,7 +57,7 @@ end
 end
 BootSpecs(b::Bool) = BootSpecs(fill(b, length(fieldnames(BootSpecs)))...)
 
-function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR,
+function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR, age_max=10,
         zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h)
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
     variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain,
@@ -66,7 +66,7 @@ function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR,
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
     return (; class, variogram, problem, params, optimal_dist, zdists,
-        cal_error, dA)
+        cal_error, age_max, dA)
 end
 
 function solution_domain(atbp, variable=:nasc)
@@ -74,9 +74,10 @@ function solution_domain(atbp, variable=:nasc)
     return domain(sol)
 end
 
-function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE_MAX)
+
+function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
     acoustics, scaling, age_length, length_weight, trawl_locations, scaling_classes = surveydata
-    class, variogram, problem, params, optimal_dist, zdists, cal_error, dA = atbp
+    class, variogram, problem, params, optimal_dist, zdists, cal_error, age_max, dA = atbp
     scaling_sub = @subset(scaling, :class .== class)
 
     z0 = mean.(zdists)
@@ -106,7 +107,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs(), age_max=AGE
         age_comp = proportion_at_age(scaling_boot, all_ages)
         age_weights = weights_at_age(scaling_boot, length_weight, all_ages, bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
-        if nrow(age_weights) != AGE_MAX+1 
+        if nrow(age_weights) != age_max + 1 
             println("nrow=$(nrow(age_weights))")
         end
         ii = trawl_assignments(coordinates.(surveydata.domain), 
