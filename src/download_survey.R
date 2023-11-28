@@ -170,7 +170,9 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
     tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
   scaling <- download_scaling(afsc, survey, data_set_id, analysis_id)
   length_weight <- download_length_weight_measurements(afsc, survey)
-  age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
+  # age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
+  # above doesn't work because there is no dataset 2 for 2016. This is a hack
+  age_length <- download_age_length_key(afsc, survey, 1, analysis_id)
   acoustics <- download_acoustics(afsc, survey)
 
   surveydir = paste0("surveydata/", survey)
@@ -191,8 +193,8 @@ afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
 
 survey.specs <-data.frame(
   survey = c(200707, 200809, 200909, 201006, 201207, 201407, 201608, 201807, 202207),
-  data_set_id = c(1, 1, 1, 1, 1, 1, 1, 1, 1),
-  analysis_id = c(3,      4,      4,      3,      5,      4,      4,      7,      1)
+  data_set_id = c(1,      1,      1,      1,      1,      1,      2,      1,      1),
+  analysis_id = c(3,      4,      4,      3,      5,      4,      1,      7,      1)
 )
 
 for (i in 1:nrow(survey.specs)) {
@@ -201,4 +203,6 @@ for (i in 1:nrow(survey.specs)) {
     survey.specs[i, "data_set_id"], 
     survey.specs[i, "analysis_id"])
 }
-# download_survey(afsc, SURVEY, DATA_SET_ID, ANALYSIS_ID)
+
+
+download_survey(afsc, 202304, 1, 2)
