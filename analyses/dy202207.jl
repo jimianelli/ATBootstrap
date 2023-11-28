@@ -34,7 +34,8 @@ end
 @df trawl_locations scatter!(:x, :y, label="")
 
 
-surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
+    surveydomain)
 
 dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
