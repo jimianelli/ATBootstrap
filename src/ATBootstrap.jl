@@ -57,6 +57,18 @@ end
 end
 BootSpecs(b::Bool) = BootSpecs(fill(b, length(fieldnames(BootSpecs)))...)
 
+struct ATBootstrapProblem
+    class
+    variogram
+    problem
+    params
+    optimal_dist
+    zdists
+    cal_error
+    age_max
+    dA
+end
+
 function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR, age_max=10,
         zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h)
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
@@ -80,16 +92,18 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
     class, variogram, problem, params, optimal_dist, zdists, cal_error, age_max, dA = atbp
     scaling_sub = @subset(scaling, :class .== class)
 
-    z0 = mean.(zdists)
+    scaling_sub = @subset(scaling, :class .== atbp.class)
 
-    println("Bootstrapping $(class)...")
+    z0 = mean.(atbp.zdists)
+
+    println("Bootstrapping $(atbp.class)...")
     results = @showprogress map(1:nreplicates) do i
         selectivity_function = make_selectivity_function(bs.selectivity)
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
         apply_selectivity!(scaling_boot, selectivity_function)
 
         predict_ts = make_ts_function(bs.predict_ts)
-        predict_age = make_age_length_function(age_length, age_max, bs.age_length)
+        predict_age = make_age_length_function(age_length, atbp.age_max, bs.age_length)
         scaling_boot = DataFramesMeta.@transform(scaling_boot,
             :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length)/10),
             :age = predict_age.(:primary_length))
@@ -103,22 +117,22 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
             @select(:x, :y, :ts, :length) 
             georef((:x, :y))
         end
-        all_ages = make_all_ages(scaling_boot, age_max)
+        all_ages = make_all_ages(scaling_boot, atbp.age_max)
         age_comp = proportion_at_age(scaling_boot, all_ages)
         age_weights = weights_at_age(scaling_boot, length_weight, all_ages, bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
-        if nrow(age_weights) != age_max + 1 
+        if nrow(age_weights) != atbp.age_max + 1 
             println("nrow=$(nrow(age_weights))")
         end
         ii = trawl_assignments(coordinates.(surveydata.domain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
-        nasc = bs.nonneg_lusim ? nonneg_lusim(atbp) : nonneg_lumult(params, z0)
-        cal_error_sim = simulate_cal_error(cal_error,  bs.calibration)
+        nasc = bs.nonneg_lusim ? nonneg_lusim(atbp) : nonneg_lumult(atbp.params, z0)
+        cal_error_sim = simulate_cal_error(atbp.cal_error,  bs.calibration)
 
         df = DataFrame(
             nasc = nasc * cal_error_sim,
-            class = class,
+            class = atbp.class,
             event_id = trawl_means.event_id[ii]
         )
         df = @chain df begin
@@ -128,7 +142,7 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
                 variable_name=:age, value_name=:p_age)
             DataFramesMeta.@transform(:n_age = :nasc ./ (4π * :sigma_bs) .* :p_age)
             @by(:age, 
-                :n_age = sum(skipmissing(:n_age)) * dA)
+                :n_age = sum(skipmissing(:n_age)) * atbp.dA)
             leftjoin(age_weights, on=:age)
             DataFramesMeta.@transform(:biomass_age = :n_age .* :weight, :i = i)
         end
