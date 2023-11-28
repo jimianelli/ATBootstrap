@@ -205,4 +205,4 @@ for (i in 1:nrow(survey.specs)) {
 }
 
 
-download_survey(afsc, 202304, 1, 2)
+# download_survey(afsc, 202304, 1, 2)
