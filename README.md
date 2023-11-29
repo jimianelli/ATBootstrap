@@ -44,7 +44,7 @@ loop, aka terminal)
 3. Install Visual Studio Code, also available on the MS store [here](https://apps.microsoft.com/detail/XP9KHM4BK9FZ7Q?hl=en-us&gl=US). VSCode is a good general-purpose code editor,
 and has the best-supported Julia integration. There are plugins for some other code editors
 [here](https://github.com/JuliaEditorSupport) if you prefer.
-4. Install the Julia VSCode extension. Click on the "Extensions" icon (four little boxes)
+4. Open VSCode and install the Julia VSCode extension. Click on the "Extensions" icon (four little boxes)
 in the left-hand toolbar and type "Julia" in the search bar; it should pop up at the top
 of  the list. Click Install.
 
@@ -91,3 +91,8 @@ The script begins with a bunch of `uising` statements to load the various librar
 first time you do this, Julia will need to precompile them, which will take a few minutes
 again. Check the news, chat with your office mate, or stare out the window...
 
+The actual bootstrapping should take a 1-2 minutes to complete. You will see progres
+bars as it runs. The add-one-in analysis for individual error sources will take about
+9 times that long (since it's replicating the analysis that many times).
+
+When you run the plotting commands, a plot window should open up within VSCode automatically.
