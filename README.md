@@ -91,3 +91,8 @@ The script begins with a bunch of `uising` statements to load the various librar
 first time you do this, Julia will need to precompile them, which will take a few minutes
 again. Check the news, chat with your office mate, or stare out the window...
 
+The actual bootstrapping should take a 1-2 minutes to complete. You will see progres
+bars as it runs. The add-one-in analysis for individual error sources will take about
+9 times that long (since it's replicating the analysis that many times).
+
+When you run the plotting commands, a plot window should open up within VSCode automatically.
