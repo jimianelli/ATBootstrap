@@ -13,10 +13,11 @@ using .ATBootstrap
 survey = "202207"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 resolution = 10.0 # km
+dA = (resolution * km2nmi)^2
 preprocess_survey_data(surveydir, resolution)
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+(; acoustics, scaling, age_length, length_weight, trawl_locations, domain) = read_survey_files(surveydir)
 
 unique(scaling.class)
 # Other classes appear to be extra transects...?
@@ -35,9 +36,8 @@ end
 
 
 surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
-    surveydomain)
+    domain)
 
-dA = (resolution * km2nmi)^2
 class_problems = map(scaling_classes) do class
     println(class)
     return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
@@ -75,18 +75,15 @@ unique(trawl_locations.event_id)
 unique(scaling.event_id)
 
 results = simulate_classes(class_problems, surveydata, nreplicates = 500)
+results = @subset(results, :age .!= "00")
 CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
 
+p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Million tons", legend=false);
+p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
+    xlabel="Age class", ylabel="Million tons");
+plot(p_abundance, p_biomass, size=(900, 400), margin=15px)
 
-@df results density(:n_age/1e9, group=:age, #xlims=(0, 8),
-    fill=true, alpha=0.7, ylims=(0, 25), xlims=(0, 10), palette=:Paired_10,
-    xlabel="Billions of fish", ylabel="Probability density",
-    title=survey)
-
-@df @subset(results, :age .!= "00") violin(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Abundance (billions)")
-
-std2(x) = diff(quantile(x, [0.25, 0.75]))
 results_summary = @chain results begin
     @orderby(:age)
     @by(:age, 
@@ -95,21 +92,8 @@ results_summary = @chain results begin
         :cv_age = std(:biomass_age) / mean(:biomass_age) * 100)
 end
 
-
-@df results density(:biomass_age/1e9, group=:age, #xlims=(0, 4),
-    fill=true, alpha=0.7, ylims=(0, 10), palette=:Paired_10,
-    xlabel="Million tons", ylabel="Probability density")
-
-p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Million tons", legend=false);
-p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Million tons");
-plot(p_abundance, p_biomass, size=(900, 400), margin=15px)
-
-
-# Testing out stepwise error removal
-
-results_step = stepwise_error(class_problems, surveydata; remove=false, nreplicates = 500)
+# One-at-a-time error analysis
+results_step = stepwise_error(class_problems, surveydata; nreplicates = 500)
 
 stepwise_summary = @chain results_step begin
     @orderby(:age)
@@ -157,4 +141,3 @@ p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=tr
     outliers=false, ylabel="C.V. (Biomass)");
 plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.20),
     ylabel="Error source")
-
