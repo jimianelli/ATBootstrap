@@ -40,8 +40,13 @@ include("mace_length_weight.jl")
 include("calibration.jl")
 include("scaling.jl")
 
-function ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, domain)
-    return (;acoustics, scaling, age_length, length_weight, trawl_locations, domain)
+struct ATSurveyData
+    acoustics
+    scaling
+    age_length
+    length_weight
+    trawl_locations
+    domain
 end
 
 @kwdef struct BootSpecs
@@ -77,22 +82,26 @@ function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR, age_max=
     params = get_lungs_params(problem, variogram.model)
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
-    return (; class, variogram, problem, params, optimal_dist, zdists,
+    return ATBootstrapProblem(class, variogram, problem, params, optimal_dist, zdists,
         cal_error, age_max, dA)
 end
 
-function solution_domain(atbp, variable=:nasc)
+function solution_domain(atbp::ATBootstrapProblem, variable=:nasc)
     sol = solve(atbp.problem, LUGS(variable => (variogram = atbp.variogram.model,)))
     return domain(sol)
 end
 
+"""
+    simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
 
-function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
-    acoustics, scaling, age_length, length_weight, trawl_locations, scaling_classes = surveydata
-    class, variogram, problem, params, optimal_dist, zdists, cal_error, age_max, dA = atbp
-    scaling_sub = @subset(scaling, :class .== class)
+Do a bootstrap analysis for one acoustic class/scaling stratum using the problem defined
+in `atbp` and the data in `surveydata`. The number of bootstrap replicates can optionally
+be set in `nreplicates`, and the `BootSpecs` object `bs` can be used to specify if any of
+the error sources should be omitted (by default all are included).
+"""
+function simulate(atbp::ATBootstrapProblem, surveydata; nreplicates=500, bs=BootSpecs())
 
-    scaling_sub = @subset(scaling, :class .== atbp.class)
+    scaling_sub = @subset(surveydata.scaling, :class .== atbp.class)
 
     z0 = mean.(atbp.zdists)
 
@@ -103,12 +112,13 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
         apply_selectivity!(scaling_boot, selectivity_function)
 
         predict_ts = make_ts_function(bs.predict_ts)
-        predict_age = make_age_length_function(age_length, atbp.age_max, bs.age_length)
+        predict_age = make_age_length_function(surveydata.age_length, atbp.age_max,
+            bs.age_length)
         scaling_boot = DataFramesMeta.@transform(scaling_boot,
             :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length)/10),
             :age = predict_age.(:primary_length))
         
-        trawl_means = get_trawl_means(scaling_boot, trawl_locations)
+        trawl_means = get_trawl_means(scaling_boot, surveydata.trawl_locations)
         if bs.drop_trawl
             popat!(trawl_means, rand(1:nrow(trawl_means)))
             # trawl_means = resample_df(trawl_means)
@@ -119,7 +129,8 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
         end
         all_ages = make_all_ages(scaling_boot, atbp.age_max)
         age_comp = proportion_at_age(scaling_boot, all_ages)
-        age_weights = weights_at_age(scaling_boot, length_weight, all_ages, bs.weights_at_age)
+        age_weights = weights_at_age(scaling_boot, surveydata.length_weight, all_ages, 
+            bs.weights_at_age)
         @assert ! any(ismissing, age_weights.weight)
         if nrow(age_weights) != atbp.age_max + 1 
             println("nrow=$(nrow(age_weights))")
@@ -152,6 +163,15 @@ function simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
     return vcat(results...)
 end
 
+"""
+    simulate_classes(class_problems, surveydata[; nreplicates=500, bs=BootSpecs()])
+
+Run a bootstrap uncertainty estimation for each scaling class, based on the
+`ATBootstrapProblem` definitions in `class_problems` and the data in `surveydata`. The
+number of bootstrap replicates can optionally be set in `nreplicates`, and the `BootSpecs`
+object `bs` can be used to specify if any of the error sources should be omitted (by
+default all are included).
+"""
 function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSpecs())
     class_results = map(p -> simulate(p, surveydata; nreplicates, bs), class_problems)
     results = @chain vcat(class_results...) begin
@@ -161,7 +181,15 @@ function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSp
     return results
 end
 
-function stepwise_error(class_problems, surveydata; remove=true, kwargs...)
+"""
+    stepwise_errors(class_problems, surveydata[; nreplicates=500, remove=false])
+
+Run a stepwise quantification of each error source for the survey analysis defined by 
+`class_problems` and `surveydata`. If `remove=false` (the default), this will add one 
+error source at a time, while fixing all others at zero, i.e. treating them as error-free
+or deterministic. Use `nreplicates` to set the number of bootstrap replicates.
+"""
+function stepwise_error(class_problems, surveydata; nreplicates=500, remove=false)
     error_sources = string.(fieldnames(BootSpecs))
     colname = remove ? :eliminated_error : :added_error
     results = map(eachindex(error_sources)) do i
@@ -170,7 +198,7 @@ function stepwise_error(class_problems, surveydata; remove=true, kwargs...)
         errs = fill(remove, length(error_sources))
         errs[i] = !remove
         bs = BootSpecs(errs...)
-        res = simulate_classes(class_problems, surveydata; bs, kwargs...)
+        res = simulate_classes(class_problems, surveydata; bs=bs, nreplicates=nreplicates)
         res[!, colname] .= error_sources[i]
         res
     end
@@ -195,6 +223,22 @@ error_labels = DataFrame(
     )
 )
 
+
+"""
+    `read_survey_files(surveydir)`
+
+Convenience function to read all files in a survey data directory `surveydir`. Assumes
+that the directory contains files with the following names:
+- acoustics_projected.csv
+- trawl_locations_projected.csv
+- scaling.csv
+- age_length.csv
+- length_weight.csv
+- surveydomain.csv
+These files are produced by running `download_survey.R`, which gets the files from
+Macebase and saves them to the survey data directory, followed by `preprocess_survey_data`,
+which projects everything geographically and averages it into spatial bins.
+"""
 function read_survey_files(surveydir)
     acoustics = CSV.read(joinpath(surveydir, "acoustics_projected.csv"), DataFrame)
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations_projected.csv"), DataFrame)
@@ -205,7 +249,9 @@ function read_survey_files(surveydir)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
     surveydomain =  PointSet(Matrix(surveydomain)')
-    return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
+    # return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
+    return ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
+        surveydomain)
 end
 
 
