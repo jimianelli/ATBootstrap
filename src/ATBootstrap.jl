@@ -1,7 +1,7 @@
 module ATBootstrap
 
 using CSV, DataFrames, DataFramesMeta, CategoricalArrays
-using GeoStats, GeoStatsPlots, Geodesy, ConcaveHull
+using GeoStats, Geodesy, ConcaveHull
 using Statistics, StatsBase
 using Distributions
 using LinearAlgebra
@@ -88,7 +88,10 @@ end
 
 function solution_domain(atbp::ATBootstrapProblem, variable=:nasc)
     sol = solve(atbp.problem, LUGS(variable => (variogram = atbp.variogram.model,)))
-    return domain(sol)
+    dom = domain(sol)
+    x = [p.coords[1] for p in dom]
+    y = [p.coords[2] for p in dom]
+    return DataFrame(x=x, y=y)
 end
 
 """

@@ -13,15 +13,6 @@ function define_conditional_sim(acoustics, surveydomain; maxlag=200.0,
     return (variogram, prob)
 end
 
-# struct LUNGS
-#     vparams
-# end
-
-# function GeoStats.solve(problem, solver::LUNGS)
-
-# end
-
-
 """
 Parameters for lower-upper non-gaussian simulation
 """
@@ -29,11 +20,9 @@ function get_lungs_params(problem, variogram, variable=:nasc)
     solver = LUGS(variable => (variogram = variogram,))
     # sol = solve(problem, solver)
     preproc = preprocess(problem, solver);
-    params = preproc[(variable,)][1]
+    params = preproc[Set([variable])][Set([variable])]
     return (data=params[1], μx=params[2], L=params[3], μ=params[4], dlocs=params[5], slocs=params[6])
 end
-
-
 
 dist_params(d::Type{Gamma}, μ, v) = (v / μ, μ^2 / v)
 dist_params(d::Type{InverseGaussian}, μ, v) = (μ, μ^3 / v)

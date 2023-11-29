@@ -1,5 +1,5 @@
 using CSV, DataFrames, DataFramesMeta, CategoricalArrays
-using GeoStats, GeoStatsPlots
+using GeoStats
 using Statistics, StatsBase
 using Distributions
 using Random
@@ -12,10 +12,10 @@ using .ATBootstrap
 
 survey = "202207"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
+const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
 preprocess_survey_data(surveydir, resolution)
-const km2nmi = 1 / 1.852
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, domain) = read_survey_files(surveydir)
 
@@ -43,29 +43,24 @@ class_problems = map(scaling_classes) do class
     return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
 end
 
+# Inspect the variograms to make sure they look ok
 pp = map(class_problems) do cp
-    plot(cp.variogram.empirical, title=cp.class)
-    plot!(cp.variogram.model, xlims=(0, 200))
+    vg_emp = cp.variogram.empirical
+    vg_mod = cp.variogram.model
+    plot(vg_emp.abscissa, vg_emp.ordinate, title=cp.class, marker=:o,
+        label="Empirical", xlabel="Lag (km)", ylabel="γ")
+    plot!(h -> vg_mod(h), 0, maximum(vg_emp.abscissa), label="Model")
 end
 plot(pp..., size=(1000, 800))
 
-# Some analysis of variability in NASC
-/(quantile(acoustics.nasc[acoustics.nasc .> 0], [0.95, 0.05])...)
-x = sort(acoustics.nasc, rev=true)
-plot(cumsum(x) / sum(x))
-findfirst(cumsum(x) / sum(x) .> 0.5) / length(x)
-
-vgm = class_problems[1].variogram.model
-plot(h -> sqrt(vgm(h)) / mean(acoustics.nasc), 0, 100)
-vline!([7])
-sqrt(vgm(1.852 * 10)) / mean(acoustics.nasc)
-
+# Check out a couple of conditional simulations
 simdomain = solution_domain(class_problems[1])
 sim_fields = [nonneg_lusim(p) for p in class_problems]
 sim_plots = map(enumerate(sim_fields)) do (i, x)
-    plot(simdomain, zcolor=x, clims=(0, quantile(x, 0.999)), 
+    scatter(simdomain.x, simdomain.y, zcolor=x, clims=(0, quantile(x, 0.999)), 
         markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
-        markersize=2.2, xlabel="Easting (km)", ylabel="Northing (km)")
+        aspect_ratio=:equal, markersize=2.2, legend=false,
+        xlabel="Easting (km)", ylabel="Northing (km)")
     df = @subset(acoustics, :class .== scaling_classes[i])
     scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
         markerstrokewidth=0)
