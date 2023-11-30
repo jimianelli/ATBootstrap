@@ -1,3 +1,20 @@
+function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
+    w = transect_width / 2
+    transect_ends = @chain acoustics begin
+        @orderby(:y)
+        @by(:transect, 
+            :x = [first(:x) + w, first(:x) - w, last(:x) + w, last(:x) - w], 
+            :y = [first(:y), first(:y), last(:y), last(:y)])
+    end
+    v = [[row.x, row.y] for row in eachrow(transect_ends)]
+    surveyhull = concave_hull(v, k)
+
+    xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
+    ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
+    surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
+        if in_hull([x, y], surveyhull)])
+    return surveydomain
+end
 
 """
     preprocess_survey_data(surveydir[, dx=0.0, dy=dx])
@@ -66,21 +83,7 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
         dropmissing()
     end
 
-    transect_ends = @chain acoustics begin
-        @orderby(:y)
-        @by(:transect, 
-            :x = [first(:x) + 10, first(:x) - 10, last(:x) + 10, last(:x) - 10], 
-            :y = [first(:y), first(:y), last(:y), last(:y)])
-    end
-    v = [[row.x, row.y] for row in eachrow(transect_ends)]
-    surveyhull = concave_hull(v, 20)
-
-    dx = 10.0
-    dy = 10.0
-    xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
-    ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
-    surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
-        if in_hull([x, y], surveyhull)])
+    surveydomain = get_survey_grid(acoustics, 20, transect_width=20.0, dx=dx, dy=dy)
 
     CSV.write(joinpath(surveydir, "acoustics_projected.csv"), acoustics)
     CSV.write(joinpath(surveydir, "length_weight.csv"), length_weight)

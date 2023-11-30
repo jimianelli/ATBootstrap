@@ -13,6 +13,7 @@ using StatsPlots, StatsPlots.PlotMeasures
 using ColorSchemes
 
 export preprocess_survey_data,
+    get_survey_grid,
     read_survey_files,
     ATSurveyData,
     ATBootstrapProblem,
