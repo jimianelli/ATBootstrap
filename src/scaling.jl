@@ -68,7 +68,7 @@ function weights_at_age(scaling, length_weight, all_ages, stochastic=false)
             :weight = predict_weight.(:primary_length))
         rightjoin(all_ages, on=[:event_id, :age])
         DataFramesMeta.@transform(:weight = replace(:weight, missing => 0.0))
-        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2, "0"))
+        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2))
         @by(:age, :weight = mean(:weight))
     end
     return res
@@ -82,7 +82,7 @@ function proportion_at_age(scaling, all_ages)#, stochastic=false)
         DataFramesMeta.@transform(:p_age = :p_age / sum(:p_age))
         rightjoin(all_ages, on=[:event_id, :age])
         DataFramesMeta.@transform(:p_age = replace(:p_age, missing => 0.0))
-        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2, "0"))
+        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2))
         @orderby(:event_id, :age)
     end
     # return age_comp

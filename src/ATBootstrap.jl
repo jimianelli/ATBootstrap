@@ -167,7 +167,8 @@ function simulate(atbp::ATBootstrapProblem, surveydata; nreplicates=500, bs=Boot
 end
 
 """
-    simulate_classes(class_problems, surveydata[; nreplicates=500, bs=BootSpecs()])
+    simulate_classes(class_problems, surveydata[; nreplicates=500, bs=BootSpecs(),
+        exclude_ages=[0]])
 
 Run a bootstrap uncertainty estimation for each scaling class, based on the
 `ATBootstrapProblem` definitions in `class_problems` and the data in `surveydata`. The
@@ -175,9 +176,12 @@ number of bootstrap replicates can optionally be set in `nreplicates`, and the `
 object `bs` can be used to specify if any of the error sources should be omitted (by
 default all are included).
 """
-function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSpecs())
+function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSpecs(),
+        exclude_ages=[0])
+    age_strings = lpad.(string.(exclude_ages), 2)
     class_results = map(p -> simulate(p, surveydata; nreplicates, bs), class_problems)
     results = @chain vcat(class_results...) begin
+        @subset(.! in(age_strings).(:age))
         @by([:age, :i],
             :n_age = sum(:n_age), :biomass_age = sum(:biomass_age))
     end
