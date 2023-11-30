@@ -170,9 +170,13 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
     tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
   scaling <- download_scaling(afsc, survey, data_set_id, analysis_id)
   length_weight <- download_length_weight_measurements(afsc, survey)
-  # age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
-  # above doesn't work because there is no dataset 2 for 2016. This is a hack
-  age_length <- download_age_length_key(afsc, survey, 1, analysis_id)
+  if (survey == 201608) {
+    # hard-coded dataset 1 here because there is no dataset 2 for age-length data in 2016.
+    # This is an ugly hack (obviously...)
+    age_length <- download_age_length_key(afsc, survey, 1, analysis_id)
+  } else {
+    age_length <- download_age_length_key(afsc, survey, data_set_id, analysis_id)
+  }
   acoustics <- download_acoustics(afsc, survey)
 
   surveydir = paste0("surveydata/", survey)
@@ -187,7 +191,7 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
 
 
 
-uid = "urmys"
+uid = readline("Enter user ID: ")
 pwd = readline(paste("Enter password for user", uid, ": "))
 afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
 
@@ -204,5 +208,5 @@ for (i in 1:nrow(survey.specs)) {
     survey.specs[i, "analysis_id"])
 }
 
-
-# download_survey(afsc, 202304, 1, 2)
+# Uncomment the line below and fill in the parameters to download a survey one-off
+download_survey(afsc, survey=202104, data_set_id=3, analysis_id=1)
