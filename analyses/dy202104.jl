@@ -117,4 +117,4 @@ stds_boot = map(1:1000) do i
 end 
 stds_boot = vcat(stds_boot...)
 
-plot_error_sources(stds_boot, plot_title=survey)
+plot_error_sources(stds_boot, plot_title=survey, xlims=(-0.005, 0.4))
