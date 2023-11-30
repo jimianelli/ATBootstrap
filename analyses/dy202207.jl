@@ -26,7 +26,7 @@ acoustics = @subset(acoustics, in(scaling_classes).(:class))
 
 acoustics = @chain acoustics begin
     @subset(in(scaling_classes).(:class), :transect .< 200)
-    DataFramesMeta.@transform(:x = round.(:x, digits=-1), :y = round.(:y, digits=-1))
+    # DataFramesMeta.@transform(:x = round.(:x, digits=-1), :y = round.(:y, digits=-1))
     @by([:transect, :class, :x, :y], 
         :lon = mean(:lon), :lat = mean(:lat), :nasc = mean(:nasc))
 end
@@ -44,6 +44,7 @@ class_problems = map(scaling_classes) do class
 end
 
 # Inspect the variograms to make sure they look ok
+plot_class_variograms(class_problems, legend=:bottomright)
 pp = map(class_problems) do cp
     vg_emp = cp.variogram.empirical
     vg_mod = cp.variogram.model
@@ -54,30 +55,12 @@ end
 plot(pp..., size=(1000, 800))
 
 # Check out a couple of conditional simulations
-simdomain = solution_domain(class_problems[1])
-sim_fields = [nonneg_lusim(p) for p in class_problems]
-sim_plots = map(enumerate(sim_fields)) do (i, x)
-    scatter(simdomain.x, simdomain.y, zcolor=x, clims=(0, quantile(x, 0.999)), 
-        markerstrokewidth=0, markershape=:square, title=string(scaling_classes[i]),
-        aspect_ratio=:equal, markersize=2.2, legend=false,
-        xlabel="Easting (km)", ylabel="Northing (km)")
-    df = @subset(acoustics, :class .== scaling_classes[i])
-    scatter!(df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
-        markerstrokewidth=0)
-end
-plot(sim_plots..., size=(1000, 1000))
-unique(trawl_locations.event_id)
-unique(scaling.event_id)
+plot_simulated_nasc(class_problems, surveydata, size=(1000, 600))
 
+# Do the bootstrap uncertainty analysis
 results = simulate_classes(class_problems, surveydata, nreplicates = 500)
-results = @subset(results, :age .!= "00")
+plot_boot_results(results)
 CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
-
-p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Million tons", legend=false);
-p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=:Paired_10,
-    xlabel="Age class", ylabel="Million tons");
-plot(p_abundance, p_biomass, size=(900, 400), margin=15px)
 
 results_summary = @chain results begin
     @orderby(:age)
@@ -120,8 +103,6 @@ results_totals = @chain [results_totals; stepwise_totals] begin
 end
 CSV.write(joinpath(@__DIR__, "results", "stepwise_error_$(survey).csv"), results_totals)
 
-@df results_totals boxplot(:error_label, :n)
-
 stds_boot = map(1:1000) do i
     df = resample_df(results_totals)
     @by(df, :error_label, 
@@ -130,9 +111,4 @@ stds_boot = map(1:1000) do i
 end 
 stds_boot = vcat(stds_boot...)
 
-p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
-    outliers=false, title=survey, ylabel="C.V. (Numbers)");
-p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
-    outliers=false, ylabel="C.V. (Biomass)");
-plot(p1, p2, layout=(2,1), size=(700, 600), legend=false, xlims=(-0.005, 0.20),
-    ylabel="Error source")
+plot_error_sources(stds_boot, plot_title=survey)
