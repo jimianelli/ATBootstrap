@@ -9,6 +9,8 @@ using Distances
 using NearestNeighbors
 using ProgressMeter
 using RCall
+using StatsPlots, StatsPlots.PlotMeasures
+using ColorSchemes
 
 export preprocess_survey_data,
     read_survey_files,
@@ -23,7 +25,11 @@ export preprocess_survey_data,
     simulate_classes,
     stepwise_error,
     BootSpecs,
-    error_labels
+    error_labels,
+    plot_class_variograms,
+    plot_simulated_nasc,
+    plot_boot_results,
+    plot_error_sources
 
 # struct SurveyData
 #     acoustics
@@ -261,6 +267,54 @@ function read_survey_files(surveydir)
         surveydomain)
 end
 
+function plot_class_variograms(class_problems; size=(800, 600), kwargs...)
+    pp = map(class_problems) do cp
+        vg_emp = cp.variogram.empirical
+        vg_mod = cp.variogram.model
+        plot(vg_emp.abscissa, vg_emp.ordinate, title=cp.class, marker=:o,
+            label="Empirical", xlabel="Lag (km)", ylabel="γ", legend=:bottomright)
+        plot!(h -> vg_mod(h), 0, maximum(vg_emp.abscissa), label="Model")
+    end
+    plot(pp...; size=size, kwargs...)
+end
 
+function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData,
+        simdomain=solution_domain(atbp))
+    sim_field = nonneg_lusim(atbp)
+    p = scatter(simdomain.x, simdomain.y, zcolor=sim_field, clims=(0, quantile(sim_field, 0.999)), 
+        markerstrokewidth=0, markershape=:square, title=string(atbp.class),
+        aspect_ratio=:equal, markersize=2.2, legend=false,
+        xlabel="Easting (km)", ylabel="Northing (km)")
+    df = @subset(surveydata.acoustics, :class .== atbp.class)
+    scatter!(p, df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
+        markerstrokewidth=0)
+    return p
+end
+
+function plot_simulated_nasc(class_problems::Vector{<:ATBootstrapProblem},
+        surveydata::ATSurveyData, simdomain = solution_domain(first(class_problems));
+        kwargs...)
+    plots = [plot_simulated_nasc(p, surveydata, simdomain) for p in class_problems]
+    return plot(plots...; kwargs...)
+end
+
+function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paired_10,
+        kwargs...)
+    p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=palette,
+    xlabel="Age class", ylabel="Abundance (billions)", legend=false);
+    p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=palette,
+        xlabel="Age class", ylabel="Biomass (Mt)");
+    plot(p_abundance, p_biomass; size=size, margin=margin, kwargs...)
+end
+
+function plot_error_sources(stds_boot; xlims=(-0.005, 0.2), size=(700, 600), 
+        kwargs...)
+    p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
+        outliers=false, ylabel="C.V. (Numbers)");
+    p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
+        outliers=false, ylabel="C.V. (Biomass)");
+    plot(p1, p2; layout=(2,1), legend=false, ylabel="Error source",
+        size=size, xlims=xlims, kwargs...)
+end
 
 end # module
