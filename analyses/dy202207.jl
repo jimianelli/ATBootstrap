@@ -45,14 +45,7 @@ end
 
 # Inspect the variograms to make sure they look ok
 plot_class_variograms(class_problems, legend=:bottomright)
-pp = map(class_problems) do cp
-    vg_emp = cp.variogram.empirical
-    vg_mod = cp.variogram.model
-    plot(vg_emp.abscissa, vg_emp.ordinate, title=cp.class, marker=:o,
-        label="Empirical", xlabel="Lag (km)", ylabel="γ")
-    plot!(h -> vg_mod(h), 0, maximum(vg_emp.abscissa), label="Model")
-end
-plot(pp..., size=(1000, 800))
+
 
 # Check out a couple of conditional simulations
 plot_simulated_nasc(class_problems, surveydata, size=(1000, 600))
