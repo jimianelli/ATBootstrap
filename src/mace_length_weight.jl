@@ -31,11 +31,13 @@ function make_weight_function(length_weight, stochastic=true, nmin=10)
         )
     end
     weight_dict = Dict(zip(binned.fork_length, binned.weight))
-    function weight(L)
-        L1 = min(round(L), Lmax)
+
+    function weight_function(L)
+        L1 = min(max(round(L), 1.0), Lmax)
         return weight_dict[L1]
     end
-    return weight    
+    
+    return weight_function 
 end
 
 # wf = make_weight_function(length_weight)
