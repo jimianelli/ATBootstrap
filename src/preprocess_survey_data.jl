@@ -68,6 +68,8 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
+    surveydomain = get_survey_grid(acoustics, 20, transect_width=20.0, dx=dx, dy=dy)
+
     acoustics = @chain acoustics begin
         DataFramesMeta.@transform(
             :x = round.(:x ./ dx) .* dx, 
@@ -95,7 +97,6 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
         dropmissing()
     end
 
-    surveydomain = get_survey_grid(acoustics, 20, transect_width=20.0, dx=dx, dy=dy)
 
     CSV.write(joinpath(surveydir, "acoustics_projected.csv"), acoustics)
     CSV.write(joinpath(surveydir, "length_weight.csv"), length_weight)
