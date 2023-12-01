@@ -17,30 +17,26 @@ resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
 preprocess_survey_data(surveydir, resolution)
 
-(; acoustics, scaling, age_length, length_weight, trawl_locations, domain) = read_survey_files(surveydir)
+(; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = read_survey_files(surveydir)
 
 unique(scaling.class)
 # Other classes appear to be extra transects...?
 scaling_classes = ["SS1", "SS1_FILTERED"]
-acoustics = @subset(acoustics, in(scaling_classes).(:class))
+acoustics = @subset(acoustics,
+    in(scaling_classes).(:class),
+    in(scaling_classes).(:class), :transect .< 200)
 
-acoustics = @chain acoustics begin
-    @subset(in(scaling_classes).(:class), :transect .< 200)
-    # DataFramesMeta.@transform(:x = round.(:x, digits=-1), :y = round.(:y, digits=-1))
-    @by([:transect, :class, :x, :y], 
-        :lon = mean(:lon), :lat = mean(:lat), :nasc = mean(:nasc))
-end
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
 
 surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
-    domain)
+    surveydomain, dA)
 
 class_problems = map(scaling_classes) do class
     println(class)
-    return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
+    return ATBootstrapProblem(surveydata, class, nlags=15, weightfunc=h -> 1/h)
 end
 
 # Inspect the variograms to make sure they look ok
