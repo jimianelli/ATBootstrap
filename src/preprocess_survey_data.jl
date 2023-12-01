@@ -68,6 +68,18 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
+    acoustics = @chain acoustics begin
+        DataFramesMeta.@transform(
+            :x = round.(:x ./ dx) .* dx, 
+            :y = round.(:y ./ dy) .* dy
+        ) 
+        @by([:transect, :class, :x, :y], 
+            :lon = mean(:lon), 
+            :lat = mean(:lat), 
+            :nasc = mean(:nasc)
+        )
+    end
+
     trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations.csv"), DataFrame)
     rename!(lowercase, trawl_locations)
     trawl_locations = @chain trawl_locations begin
