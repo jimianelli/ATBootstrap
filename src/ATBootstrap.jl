@@ -54,6 +54,7 @@ struct ATSurveyData
     length_weight
     trawl_locations
     domain
+    dA
 end
 
 @kwdef struct BootSpecs
@@ -78,10 +79,16 @@ struct ATBootstrapProblem
     zdists
     cal_error
     age_max
-    dA
 end
 
-function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR, age_max=10,
+"""
+    ATBootstrapProblem(surveydata, class[, cal_error=0.1, age_max=10,
+        zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h])
+
+Set up an `ATBootstrapProblem`, specifying how to simulate bootstrap analyses of the 
+scaling stratum `class` from the data in `surveydata`.
+"""
+function ATBootstrapProblem(surveydata, class; cal_error=0.1, age_max=10,
         zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h)
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
     variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain,
@@ -90,7 +97,7 @@ function ATBootstrapProblem(surveydata, class, dA; cal_error=CAL_ERROR, age_max=
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
     return ATBootstrapProblem(class, variogram, problem, params, optimal_dist, zdists,
-        cal_error, age_max, dA)
+        cal_error, age_max)
 end
 
 function solution_domain(atbp::ATBootstrapProblem, variable=:nasc)
@@ -109,7 +116,8 @@ in `atbp` and the data in `surveydata`. The number of bootstrap replicates can o
 be set in `nreplicates`, and the `BootSpecs` object `bs` can be used to specify if any of
 the error sources should be omitted (by default all are included).
 """
-function simulate(atbp::ATBootstrapProblem, surveydata; nreplicates=500, bs=BootSpecs())
+function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicates=500, 
+        bs=BootSpecs())
 
     scaling_sub = @subset(surveydata.scaling, :class .== atbp.class)
 
@@ -131,7 +139,6 @@ function simulate(atbp::ATBootstrapProblem, surveydata; nreplicates=500, bs=Boot
         trawl_means = get_trawl_means(scaling_boot, surveydata.trawl_locations)
         if bs.drop_trawl
             popat!(trawl_means, rand(1:nrow(trawl_means)))
-            # trawl_means = resample_df(trawl_means)
         end
         geotrawl_means = @chain trawl_means begin
             @select(:x, :y, :ts, :length) 
@@ -163,7 +170,7 @@ function simulate(atbp::ATBootstrapProblem, surveydata; nreplicates=500, bs=Boot
                 variable_name=:age, value_name=:p_age)
             DataFramesMeta.@transform(:n_age = :nasc ./ (4π * :sigma_bs) .* :p_age)
             @by(:age, 
-                :n_age = sum(skipmissing(:n_age)) * atbp.dA)
+                :n_age = sum(skipmissing(:n_age)) * surveydata.dA)
             leftjoin(age_weights, on=:age)
             DataFramesMeta.@transform(:biomass_age = :n_age .* :weight, :i = i)
         end
@@ -263,9 +270,9 @@ function read_survey_files(surveydir)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
     surveydomain =  PointSet(Matrix(surveydomain)')
-    # return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
-    return ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
-        surveydomain)
+    return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
+    # return ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
+    #     surveydomain)
 end
 
 function plot_class_variograms(class_problems; size=(800, 600), kwargs...)
@@ -280,22 +287,23 @@ function plot_class_variograms(class_problems; size=(800, 600), kwargs...)
 end
 
 function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData,
-        simdomain=solution_domain(atbp))
+        simdomain=solution_domain(atbp); bubble_factor=3e-3)
     sim_field = nonneg_lusim(atbp)
     p = scatter(simdomain.x, simdomain.y, zcolor=sim_field, clims=(0, quantile(sim_field, 0.999)), 
         markerstrokewidth=0, markershape=:square, title=string(atbp.class),
         aspect_ratio=:equal, markersize=2.2, legend=false,
         xlabel="Easting (km)", ylabel="Northing (km)")
     df = @subset(surveydata.acoustics, :class .== atbp.class)
-    scatter!(p, df.x, df.y, color=:white, markersize=df.nasc*3e-3, alpha=0.3,
+    scatter!(p, df.x, df.y, color=:white, markersize=df.nasc*bubble_factor, alpha=0.3,
         markerstrokewidth=0)
     return p
 end
 
 function plot_simulated_nasc(class_problems::Vector{<:ATBootstrapProblem},
-        surveydata::ATSurveyData, simdomain = solution_domain(first(class_problems));
-        kwargs...)
-    plots = [plot_simulated_nasc(p, surveydata, simdomain) for p in class_problems]
+        surveydata::ATSurveyData, simdomain=solution_domain(first(class_problems)); 
+        bubble_factor=3e-3, kwargs...)
+    plots = [plot_simulated_nasc(p, surveydata, simdomain, bubble_factor=bubble_factor)
+        for p in class_problems]
     return plot(plots...; kwargs...)
 end
 
