@@ -19,7 +19,7 @@ cals = CSV.read(joinpath(@__DIR__, "../surveydata/calibration_results.csv"), Dat
 # 10log10(std(exp10.(cals.sa_corr_calc / 10)) / sqrt(3) + 1)
 # 10log10(std(skipmissing(exp10.(cals.sa_corr_ek80 / 10))) / sqrt(3) + 1)
 
-const CAL_ERROR = 0.1
+# const CAL_ERROR = 0.1
 
 function simulate_cal_error(cal_error, stochastic=true) 
     if stochastic
