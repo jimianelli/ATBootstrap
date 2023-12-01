@@ -191,8 +191,8 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
 
 
 
-uid = readline("Enter user ID: ")
-pwd = readline(paste("Enter password for user", uid, ": "))
+uid <- readline("Enter user ID: ")
+pwd <- readline(paste("Enter password for user", uid, ": "))
 afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
 
 survey.specs <-data.frame(
