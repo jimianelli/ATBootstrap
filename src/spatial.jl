@@ -3,7 +3,7 @@ const zdist_candidates = [Gamma, InverseGamma, InverseGaussian, LogNormal]
 function define_conditional_sim(acoustics, surveydomain; maxlag=200.0, 
         nlags=20, weightfunc=h -> 1/h)
     geonasc = acoustics[!, [:nasc, :x, :y]]
-    geonasc.nasc .+= 1e-3
+    geonasc.nasc .+= 1e-3 # add a small epsilon so no zeros
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
     evg = EmpiricalVariogram(geonasc, :nasc, nlags=nlags, maxlag=maxlag)
