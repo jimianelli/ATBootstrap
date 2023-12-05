@@ -1,33 +1,3 @@
-# # Numbers from Matta and Kimura 2012, Age determination manual
-# const L∞ = 67.33 # mm
-# const t₀ = -0.205
-# const K = 0.1937
-# const AGE_MAX = 10
-# predict_length(t) = L∞ * (1 - exp(-K * (t - t₀)))
-
-
-# function predict_age_deterministic(L, age_max=AGE_MAX)
-#     if L < predict_length(age_max)
-#         return round(Int, log(1 - L/L∞) / -K + t₀)
-#     else
-#        return age_max
-#    end
-# end
-
-# function predict_age_stochastic(L, age_max=AGE_MAX)
-#     return max(0, predict_age_deterministic(L + 2randn(), age_max))# + rand([-1, 0, 0, 0, 1]))
-# end
-
-# function predict_age(L, stochastic=true, age_max=AGE_MAX)
-#     if stochastic
-#         return predict_age_stochastic(L, age_max)
-#     else
-#         return predict_age_deterministic(L, age_max)
-#     end
-# end
-
-
-
 function resample_df(df, stochastic=true)
     n = nrow(df)
     if stochastic
@@ -61,30 +31,66 @@ function make_all_ages(scaling, age_max)
         age = 0:age_max)
 end
 
-function weights_at_age(scaling, length_weight, all_ages, stochastic=false)
-    predict_weight = make_weight_function(length_weight, stochastic)
+"""
+Create a data frame of all the scatterer types into which backscatter should be allocated.
+By default, this will be every species caught in the trawls, and further subdivided by 
+year-class for pollock. 
+"""
+function make_all_categories(scaling, age_max, aged_species=[21740])
+    event_ids = unique(scaling.event_id)
+    ages = 0:age_max
+    unaged_species = setdiff(event_ids, aged_species)
+    with_ages = allcombinations(DataFrame,
+        event_id = event_ids,
+        age = ages,
+        species_code = aged_species)
+    without_ages = allcombinations(DataFrame,
+        event_id = event_ids,
+        age = [-1],
+        species_code = unaged_species)
+    all_categories = @chain [with_ages; without_ages] begin
+        @orderby(:event_id, :species_code, :age)
+        DataFramesMeta.@transform(
+            :category = [join([s, "@", a]) for (s, a) in zip(:species_code, :age)]
+        )
+    end
+    return all_categories
+end
+
+function pollock_weights_at_age(scaling, length_weight, all_ages, stochastic=false)
+    length_weight_pollock = @subset(length_weight, :species_code .== 21740)
+    predict_weight = make_weight_function(length_weight_pollock, stochastic)
     res = @chain scaling begin
+        @subset(:species_code .== 21740) # only calculate for pollock
         DataFramesMeta.@transform(
             :weight = predict_weight.(:primary_length))
         rightjoin(all_ages, on=[:event_id, :age])
         DataFramesMeta.@transform(:weight = replace(:weight, missing => 0.0))
-        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2))
+        # DataFramesMeta.@transform(:age = lpad.(string.(:age), 2))
         @by(:age, :weight = mean(:weight))
+        DataFramesMeta.@transform(:species_code = 21740)
     end
     return res
 end
 
-function proportion_at_age(scaling, all_ages)#, stochastic=false)
-    age_comp = @chain scaling begin
-        # DataFramesMeta.@transform(:age = predict_age.(:primary_length, stochastic))
-        @by([:event_id, :age], :p_age=sum(:w))
-        DataFrames.groupby(:event_id)
-        DataFramesMeta.@transform(:p_age = :p_age / sum(:p_age))
-        rightjoin(all_ages, on=[:event_id, :age])
-        DataFramesMeta.@transform(:p_age = replace(:p_age, missing => 0.0))
-        DataFramesMeta.@transform(:age = lpad.(string.(:age), 2))
-        @orderby(:event_id, :age)
+function proportion_at_category(scaling, all_categories, aged_species=[21740])
+    use_ages = in(aged_species)
+    scaling.category .= ""
+    for (i, r) in enumerate(eachrow(scaling))
+        if use_ages(r.species_code)
+            scaling[i, :category] = join([r.species_code, "@", r.age])
+        else
+            scaling[i, :category] = join([r.species_code, "@", "-1"])
+        end
     end
-    # return age_comp
-    return DataFrames.unstack(age_comp, :age, :p_age)
+    comp = @chain scaling begin
+        @by([:event_id, :category], :p_cat=sum(:w))
+        DataFrames.groupby(:event_id)
+        DataFramesMeta.@transform(:p_cat = :p_cat / sum(:p_cat))
+        rightjoin(all_categories, on=[:event_id, :category])
+        DataFramesMeta.@transform(:p_cat = replace(:p_cat, missing => 0.0))
+        select(:event_id, :category, :p_cat)
+        @orderby(:event_id, :category)
+    end
+    return DataFrames.unstack(comp, :category, :p_cat, fill=0.0)
 end

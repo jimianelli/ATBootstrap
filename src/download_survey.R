@@ -99,6 +99,16 @@ download_length_weight_measurements <- function(connection, survey) {
           clamsbase2.measurements.survey = {survey}
           AND (clamsbase2.measurements.measurement_type = 'fork_length'
             OR clamsbase2.measurements.measurement_type = 'organism_weight');"))
+  species = dbGetQuery(connection,
+                        glue("SELECT
+          clamsbase2.samples.sample_id, 
+          clamsbase2.samples.species_code
+          FROM clamsbase2.samples
+          WHERE 
+          clamsbase2.samples.survey = {survey};"))
+  length_weight <- cleanup(length_weight)
+  species <- cleanup(species)
+  length_weight <- left_join(length_weight, species, by="sample_id")
   return(length_weight)
 }
 

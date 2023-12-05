@@ -93,7 +93,7 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
     length_weight = CSV.read(joinpath(surveydir, "measurements.csv"), DataFrame)
     rename!(lowercase, length_weight)
     length_weight = @chain length_weight begin
-        unstack([:specimen_id, :event_id], :measurement_type, :measurement_value)
+        unstack([:specimen_id, :species_code, :event_id], :measurement_type, :measurement_value)
         dropmissing()
     end
 

@@ -145,13 +145,10 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
             georef((:x, :y))
         end
         all_ages = make_all_ages(scaling_boot, atbp.age_max)
-        age_comp = proportion_at_age(scaling_boot, all_ages)
-        age_weights = weights_at_age(scaling_boot, surveydata.length_weight, all_ages, 
-            bs.weights_at_age)
-        @assert ! any(ismissing, age_weights.weight)
-        if nrow(age_weights) != atbp.age_max + 1 
-            println("nrow=$(nrow(age_weights))")
-        end
+        all_categories = make_all_categories(scaling_boot, atbp.age_max)
+        category_comp = proportion_at_category(scaling_boot, all_categories)
+        age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
+            all_ages, bs.weights_at_age)
         ii = trawl_assignments(coordinates.(surveydata.domain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
@@ -165,14 +162,23 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
         )
         df = @chain df begin
             leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
-            leftjoin(age_comp, on=:event_id)
-            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]), 
-                variable_name=:age, value_name=:p_age)
-            DataFramesMeta.@transform(:n_age = :nasc ./ (4π * :sigma_bs) .* :p_age)
-            @by(:age, 
-                :n_age = sum(skipmissing(:n_age)) * surveydata.dA)
-            leftjoin(age_weights, on=:age)
-            DataFramesMeta.@transform(:biomass_age = :n_age .* :weight, :i = i)
+            leftjoin(category_comp, on=:event_id)
+            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]),
+                variable_name=:category, value_name=:p_cat)
+            DataFramesMeta.@transform(:n = :nasc ./ (4π * :sigma_bs) .* :p_cat)
+            @by(:category,
+                :n = sum(skipmissing(:n)) * surveydata.dA)
+            DataFramesMeta.@transform(
+                :species_code = parse.(Int, first.(split.(:category, "@"))),
+                :age = parse.(Int, last.(split.(:category, "@")))
+            )
+            leftjoin(age_weights, on=[:species_code, :age])
+            DataFramesMeta.@transform(
+                :biomass = :n .* :weight, 
+                :i = i
+            )
+            @select(:i, :species_code, :age, :category, :n, :biomass)
+            @orderby(:i, :species_code, :age, :n, :biomass)
         end
         return df
     end
@@ -182,22 +188,33 @@ end
 
 """
     simulate_classes(class_problems, surveydata[; nreplicates=500, bs=BootSpecs(),
-        exclude_ages=[0]])
+        report_species=[21740], report_ages=1:first(class_problems).age_max)
 
 Run a bootstrap uncertainty estimation for each scaling class, based on the
 `ATBootstrapProblem` definitions in `class_problems` and the data in `surveydata`. The
 number of bootstrap replicates can optionally be set in `nreplicates`, and the `BootSpecs`
 object `bs` can be used to specify if any of the error sources should be omitted (by
 default all are included).
+
+By default, abundance and biomass are reported for pollock by age class. Abundances are
+calculated for other species (but not biomasses, and not by age, since this code 
+doesn't put together the length-age and length-weight tables for them). If you would like
+to return the abundance results for other species, you can list their species codes in the
+optional `report_species` argument. 
+
+For pollock, you can limit the ages reported by passing them to the `report_ages` argument.
+Note that this just subsets the results post-simulation; to set the maximum age see the 
+documentation for `ATBootstrapProblem.`
 """
 function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSpecs(),
-        exclude_ages=[0])
-    age_strings = lpad.(string.(exclude_ages), 2)
+        report_species=[21740], report_ages=1:first(class_problems).age_max)
     class_results = map(p -> simulate(p, surveydata; nreplicates, bs), class_problems)
     results = @chain vcat(class_results...) begin
-        @subset(.! in(age_strings).(:age))
-        @by([:age, :i],
-            :n_age = sum(:n_age), :biomass_age = sum(:biomass_age))
+        @subset(
+            in(report_ages).(:age),
+            in(report_species).(:species_code)
+        )
+        @by([:i, :species_code, :age], :n = sum(:n), :biomass = sum(:biomass))
     end
     return results
 end
@@ -309,9 +326,9 @@ end
 
 function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paired_10,
         kwargs...)
-    p_abundance = @df results violin(:age, :n_age/1e9, group=:age, palette=palette,
+    p_abundance = @df results violin(:age, :n/1e9, group=:age, palette=palette,
     xlabel="Age class", ylabel="Abundance (billions)", legend=false);
-    p_biomass = @df results violin(:age, :biomass_age/1e9, group=:age, palette=palette,
+    p_biomass = @df results violin(:age, :biomass/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Biomass (Mt)");
     plot(p_abundance, p_biomass; size=size, margin=margin, kwargs...)
 end
