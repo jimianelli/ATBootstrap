@@ -190,7 +190,7 @@ lookup_survey_ship <- function(survey) ifelse(survey %in% c(200608, 200408), 21,
 ispollock <- function(class) substr(toupper(class), 1, 2) == "PK"
 
 
-download_acoustics <- function(connection, survey) {
+download_acoustics <- function(connection, survey, ebs=TRUE) {
   print("Downloading acoustic data...")
 
   datasetid = 1
@@ -210,7 +210,10 @@ download_acoustics <- function(connection, survey) {
   intervalsdata = mutate(intervalsdata, start_longitute = fixlongitude(start_longitude))
 
   cellsdata = left_join(cellsdata, intervalsdata, by=c("survey", "interval"))
-  cellsdata$class[cellsdata$zone %in% c(2, 3)] = "BT"
+  # if this is an EBS survey, create a new virtual scaling stratum for the bottom 3 m
+  if (ebs) {
+    cellsdata$class[cellsdata$zone %in% c(2, 3)] = "BT"
+  }
 
   integrated = cellsdata %>%
     # filter(zone <= zonemax) %>%
@@ -224,12 +227,10 @@ download_acoustics <- function(connection, survey) {
 }
 
 
-download_survey <- function(connection, survey, data_set_id, analysis_id) {
+download_survey <- function(connection, survey, data_set_id, analysis_id, ebs=TRUE) {
   print(glue("Fetching data from survey {survey}"))
   trawl_locations <- download_trawl_locations(afsc, survey)
-  trawl_locations_gap <- download_trawl_locations_gap(afsc, survey)
   scaling <- download_scaling(afsc, survey, data_set_id, analysis_id)
-  scaling_gap <- download_scaling_gap(afsc, survey)
   length_weight <- download_length_weight_measurements(afsc, survey)
   if (survey == 201608) {
     # hard-coded dataset 1 here because there is no dataset 2 for age-length data in 2016.
@@ -243,12 +244,16 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
   surveydir = paste0("surveydata/", survey)
   dir.create(surveydir, showWarnings = FALSE)
   write.csv(trawl_locations, paste0(surveydir, "/trawl_locations_mace.csv"))
-  write.csv(trawl_locations_gap, paste0(surveydir, "/trawl_locations_gap.csv"))
   write.csv(scaling, paste0(surveydir, "/scaling_mace.csv"))
-  write.csv(scaling_gap, paste0(surveydir, "/scaling_gap.csv"))
   write.csv(length_weight, paste0(surveydir, "/measurements.csv"))
   write.csv(age_length, paste0(surveydir, "/age_length.csv"))
   write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
+  if (ebs) {
+    scaling_gap <- download_scaling_gap(afsc, survey)
+    trawl_locations_gap <- download_trawl_locations_gap(afsc, survey)
+    write.csv(trawl_locations_gap, paste0(surveydir, "/trawl_locations_gap.csv"))
+    write.csv(scaling_gap, paste0(surveydir, "/scaling_gap.csv"))
+  }
   print(paste0("Downloaded survey ", survey, "!"))
 }
 
