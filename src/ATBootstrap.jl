@@ -253,14 +253,14 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
 end
 
 """
-    stepwise_errors(class_problems, surveydata[; nreplicates=500, remove=false])
+    stepwise_errors(atbp, surveydata[; nreplicates=500, remove=false])
 
 Run a stepwise quantification of each error source for the survey analysis defined by 
-`class_problems` and `surveydata`. If `remove=false` (the default), this will add one 
+`atbp` and `surveydata`. If `remove=false` (the default), this will add one 
 error source at a time, while fixing all others at zero, i.e. treating them as error-free
 or deterministic. Use `nreplicates` to set the number of bootstrap replicates.
 """
-function stepwise_error(class_problems, surveydata; nreplicates=500, remove=false)
+function stepwise_error(atbp, surveydata; nreplicates=500, remove=false)
     error_sources = string.(fieldnames(BootSpecs))
     colname = remove ? :eliminated_error : :added_error
     results = map(eachindex(error_sources)) do i
@@ -269,7 +269,7 @@ function stepwise_error(class_problems, surveydata; nreplicates=500, remove=fals
         errs = fill(remove, length(error_sources))
         errs[i] = !remove
         bs = BootSpecs(errs...)
-        res = simulate_classes(class_problems, surveydata; bs=bs, nreplicates=nreplicates)
+        res = simulate(atbp, surveydata; bs=bs, nreplicates=nreplicates)
         res[!, colname] .= error_sources[i]
         res
     end
@@ -325,6 +325,10 @@ function read_survey_files(surveydir)
     #     surveydomain)
 end
 
+"""
+Plot the empirical and fitted model variogram for each acoustic scaling stratum in an 
+`ATBootstrapProblem`. Optional plotting parameters can be passed in as keyword arguments.
+"""
 function plot_class_variograms(atbp::ATBootstrapProblem; size=(800, 600), kwargs...)
     pp = map(atbp.class_problems) do cp
         vg_emp = cp.variogram.empirical
@@ -336,6 +340,16 @@ function plot_class_variograms(atbp::ATBootstrapProblem; size=(800, 600), kwargs
     plot(pp...; size=size, kwargs...)
 end
 
+"""
+    plot_simulated_nasc(scp, surveydata, simdomain=solution_domain(scp); 
+        alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...)
+
+Plot a NASC field simulated based on the variogram model in `scp` and conditional on the 
+observed acoustic data in `surveydata`. Observed NASC values are overplotted as circles,
+with radius proprotional to backscatter. The optional arguments `alpha` and `max_bubblesize`
+control the transparency and scaling of these bubbles. Optional argument `markersize` 
+controls the size of the simulated data points. 
+"""
 function plot_simulated_nasc(scp::ScalingClassProblem, surveydata::ATSurveyData,
         simdomain=solution_domain(scp); 
         alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...)
@@ -352,6 +366,17 @@ function plot_simulated_nasc(scp::ScalingClassProblem, surveydata::ATSurveyData,
     return p
 end
 
+"""
+    plot_simulated_nasc(atbp, surveydata[, 
+        simdomain=solution_domain(first(atbp.class_problems));
+        alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...])
+
+Plot simulated NASC fields for each scaling stratum specified in `atbp`, conditional on the 
+observed acoustic data in `surveydata`. Observed NASC values are overplotted as circles,
+with radius proprotional to backscatter. The optional arguments `alpha` and `max_bubblesize`
+control the transparency and scaling of these bubbles. Optional argument `markersize` 
+controls the size of the simulated data points. 
+"""
 function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData, 
         simdomain=solution_domain(first(atbp.class_problems));
         alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...)
@@ -361,15 +386,21 @@ function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData,
     return plot(plots...; kwargs...)
 end
 
+"""
+Make violin plots of pollock abundance- and biomass-at-age from the data frame `results`,
+the output of running `simulate`. Plotting options can be passed in as keyword arguments.
+"""
 function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paired_10,
         kwargs...)
-    xticks = sort(unique(results.age))
-    p_abundance = @df results violin(:age, :n/1e9, group=:age, palette=palette,
+    pk_results = @subset(results, :species_code .== 21740)
+    xticks = sort(unique(pk_results.age))
+    p_abundance = @df pk_results violin(:age, :n/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Abundance (billions)", legend=false);
-    p_biomass = @df results violin(:age, :biomass/1e9, group=:age, palette=palette,
+    p_biomass = @df pk_results violin(:age, :biomass/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Biomass (Mt)");
     plot(p_abundance, p_biomass; xticks=xticks, size=size, margin=margin, kwargs...)
 end
+
 
 function plot_error_sources(stds_boot; xlims=(-0.005, 0.2), size=(700, 600), 
         kwargs...)

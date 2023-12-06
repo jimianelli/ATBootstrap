@@ -56,7 +56,7 @@ results_summary = @chain results begin
 end
 
 # One-at-a-time error analysis
-results_step = stepwise_error(class_problems, surveydata; nreplicates = 500)
+results_step = stepwise_error(atbp, surveydata; nreplicates = 500)
 
 stepwise_summary = @chain results_step begin
     @orderby(:age)
