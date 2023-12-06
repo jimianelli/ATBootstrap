@@ -15,7 +15,7 @@ function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
     ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
     surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
         if in_hull([x, y], surveyhull)])
-    return surveydomain
+    return surveydomain, surveyhull
 end
 
 """
@@ -126,7 +126,8 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
-    surveydomain = get_survey_grid(acoustics, 20, transect_width=20.0, dx=dx, dy=dy)
+    surveydomain, surveyhull = get_survey_grid(acoustics, 20, transect_width=20.0,
+        dx=dx, dy=dy)
 
     acoustics = @chain acoustics begin
         DataFramesMeta.@transform(
@@ -143,7 +144,11 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
     trawl_locations = @chain trawl_locations begin
         DataFramesMeta.@transform(:lla = LLA.(:latitude, :longitude, 0.0))
         DataFramesMeta.@transform(:utm = [UTM(x, utmzone, true, wgs84) for x in :lla])
-        DataFramesMeta.@transform(:x = [u.x / 1e3 for u in :utm], :y = [u.y / 1e3 for u in :utm])
+        DataFramesMeta.@transform(
+            :x = [u.x / 1e3 for u in :utm], 
+            :y = [u.y / 1e3 for u in :utm]
+        )
+        @subset([in_hull([x, y], surveyhull) for (x, y) in zip(:x, :y)])
     end
 
     length_weight = CSV.read(joinpath(surveydir, "measurements.csv"), DataFrame)
