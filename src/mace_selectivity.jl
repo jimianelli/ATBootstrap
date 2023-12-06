@@ -47,8 +47,9 @@ end
 function apply_selectivity!(scaling, selectivity_function)
     for i in 1:nrow(scaling)
         species_code = scaling[i, :species_code]
+        class = scaling[i, :class]
         L = scaling[i, :primary_length]
-        if species_code == 21740
+        if species_code == 21740 && class != "BT"
             scaling[i, :sample_correction_scalar] = 1 / selectivity_function(L)
             scaling[i, :w] = scaling[i, :catch_sampling_expansion] .*
                 scaling[i, :user_defined_expansion] .*

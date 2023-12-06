@@ -66,9 +66,7 @@ function pollock_weights_at_age(scaling, length_weight, all_ages, stochastic=fal
             :weight = predict_weight.(:primary_length))
         rightjoin(all_ages, on=[:event_id, :age])
         DataFramesMeta.@transform(:weight = replace(:weight, missing => 0.0))
-        # DataFramesMeta.@transform(:age = lpad.(string.(:age), 2))
-        @by(:age, :weight = mean(:weight))
-        DataFramesMeta.@transform(:species_code = 21740)
+        @by([:species_code, :age], :weight = mean(:weight))
     end
     return res
 end

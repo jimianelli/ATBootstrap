@@ -1,3 +1,5 @@
+include("nearbottom.jl")
+
 function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
     w = transect_width / 2
     transect_ends = @chain acoustics begin
@@ -14,6 +16,50 @@ function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
     surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
         if in_hull([x, y], surveyhull)])
     return surveydomain
+end
+
+"""
+Merge MACE's "macebase2.scaling_key_source_data" table with GAP's "racebase.specimen"
+table to make a combined virtual SKSD table. This assigns all specimens from the GAP 
+trawls to a new scaling stratum called "BT", which is applied to the bottom 3 m of the 
+water column. GAP haul numbers are multiplied by -1 to make them unique from the MACE 
+event_id's.
+"""
+function merge_scaling(scaling_mace, scaling_gap)
+    ts_key = @by(scaling_mace, :species_code, :ts_relationship=first(:ts_relationship))
+    
+    scaling_mace1 = @select(scaling_mace, :survey, :ship, :event_id, :class, :species_code, 
+        :primary_length, :ts_length, :ts_relationship, :catch_sampling_expansion,
+        :user_defined_expansion, :sample_correction_scalar, :haul_weight, :w)
+
+    scaling_gap1 = @chain scaling_gap begin
+        DataFramesMeta.@transform(
+            :survey = :cruise,
+            :ship = :vessel,
+            :event_id = -:haul,
+            :class = "BT",
+            :primary_length = :length ./ 10,
+            :ts_length = :length ./ 10, # not exactly right
+            :catch_sampling_expansion = 1,
+            :sample_correction_scalar = 1,
+            :haul_weight = 1,
+            :w = 1
+        )
+        leftjoin(nearbottom_coefs, on=:species_code)
+        leftjoin(ts_key, on=:species_code)
+        DataFramesMeta.@transform(
+            :ts_relationship = replace(:ts_relationship, missing => "generic_swimbladder_fish")
+        )
+        @select(:survey, :ship, :event_id, :class, :species_code,
+            :primary_length, :ts_length, :ts_relationship, :catch_sampling_expansion,
+            :user_defined_expansion, :sample_correction_scalar, :haul_weight, :w)
+    end
+    return [scaling_mace1; scaling_gap1]
+end
+
+
+function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
+    return [trawl_locations_mace; trawl_locations_gap]
 end
 
 """
@@ -41,8 +87,20 @@ The preprocessing includes the following tasks:
 - General tidying.
 
 """
-function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
-    scaling = CSV.read(joinpath(surveydir, "scaling.csv"), DataFrame)
+function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
+    scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame)
+    trawl_locations_mace = CSV.read(joinpath(surveydir, "trawl_locations_mace.csv"), DataFrame)
+
+    if ebs
+        scaling_gap = CSV.read(joinpath(surveydir, "scaling_gap.csv"), DataFrame)
+        scaling = merge_scaling(scaling_mace, scaling_gap)
+        trawl_locations_gap = CSV.read(joinpath(surveydir, "trawl_locations_gap.csv"), DataFrame)
+        trawl_locations = merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
+    else
+        scaling = scaling_mace
+        trawl_locations = trawl_locations_mace
+    end
+    
     scaling_classes = unique(scaling.class)
 
     acoustics = CSV.read(joinpath(surveydir, "acoustics.csv"), DataFrame)
@@ -82,10 +140,8 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
         )
     end
 
-    trawl_locations = CSV.read(joinpath(surveydir, "trawl_locations.csv"), DataFrame)
-    rename!(lowercase, trawl_locations)
     trawl_locations = @chain trawl_locations begin
-        DataFramesMeta.@transform(:lla = LLA.(:eqlatitude, :eqlongitude, 0.0))
+        DataFramesMeta.@transform(:lla = LLA.(:latitude, :longitude, 0.0))
         DataFramesMeta.@transform(:utm = [UTM(x, utmzone, true, wgs84) for x in :lla])
         DataFramesMeta.@transform(:x = [u.x / 1e3 for u in :utm], :y = [u.y / 1e3 for u in :utm])
     end
@@ -98,8 +154,27 @@ function preprocess_survey_data(surveydir, dx=10.0, dy=dx)
     end
 
 
+    CSV.write(joinpath(surveydir, "scaling.csv"), scaling)
     CSV.write(joinpath(surveydir, "acoustics_projected.csv"), acoustics)
     CSV.write(joinpath(surveydir, "length_weight.csv"), length_weight)
     CSV.write(joinpath(surveydir, "trawl_locations_projected.csv"), trawl_locations)
     CSV.write(joinpath(surveydir, "surveydomain.csv"), surveydomain)
 end
+
+
+# scaling_gap1 = @chain scaling_gap begin
+#     DataFramesMeta.@transform(
+#         :survey = :cruise,
+#         :ship = :vessel,
+#         :event_id = -:haul,
+#         :class = "BT",
+#         :primary_length = :length ./ 10,
+#         :catch_sampling_expansion = 1,
+#         :user_defined_expansion = 1,
+#         :sample_correction_scalar = 1,
+#     )
+#     @select(:survey, :ship, :event_id, :class, :species_code, :primary_length, 
+#         :catch_sampling_expansion, :user_defined_expansion, :sample_correction_scalar)
+# end
+# scaling1 = @select(scaling, :survey, :ship, :event_id, :class, :species_code, :primary_length, 
+#         :catch_sampling_expansion, :user_defined_expansion, :sample_correction_scalar)

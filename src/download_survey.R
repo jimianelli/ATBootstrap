@@ -3,6 +3,15 @@ library(glue)
 library(dplyr)
 library(stringr)
 
+species = dbGetQuery(connection,
+                    glue("SELECT
+      clamsbase2.species.species_code,
+      clamsbase2.species.scientific_name,
+      clamsbase2.species.common_name
+      FROM
+      clamsbase2.species;"))
+species = cleanup(species)
+
 cells_query <- function(survey, ship, datasetid, zonemax, zonemin) {
   sql = glue("SELECT
       macebase2.integration_results.survey,
@@ -61,19 +70,29 @@ download_scaling <- function(connection, survey, datasetid, analysisid) {
   scaling = cleanup(scaling)
 
   print("Downloading species names...")
-  species = dbGetQuery(connection,
-                       glue("SELECT
-          clamsbase2.species.species_code,
-          clamsbase2.species.scientific_name,
-          clamsbase2.species.common_name
-          FROM
-          clamsbase2.species;"))
-  species = cleanup(species)
 
   scaling = scaling %>%
     left_join(species, by="species_code") %>%
     mutate(w = catch_sampling_expansion * user_defined_expansion * sample_correction_scalar * haul_weight)
   return(scaling)
+}
+
+download_scaling_gap <- function(connection, survey) {
+  print("Dowloading GAP specimen data...")
+  year = floor(survey / 100)
+  query = glue("SELECT
+    racebase.specimen.hauljoin,
+    racebase.specimen.cruise,
+    racebase.specimen.vessel,
+    racebase.specimen.haul,
+    racebase.specimen.specimenid,
+    racebase.specimen.species_code,
+    racebase.specimen.length
+    FROM racebase.specimen
+    WHERE floor(cruise/100) = {year};")
+  scaling_gap <- dbGetQuery(connection, query)
+  scaling_gap <- cleanup(scaling_gap)
+  return(scaling_gap)
 }
 
 download_trawl_locations <- function(connection, survey) {
@@ -86,14 +105,44 @@ download_trawl_locations <- function(connection, survey) {
   trawl_locations = cleanup(trawl_locations)
   trawl_locations = trawl_locations %>%
     filter(event_parameter %in% c("EQLongitude", "EQLatitude")) %>%
-    select(survey, event_id, event_parameter, parameter_value)
+    select(survey, event_id, event_parameter, parameter_value) %>%
+    tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value) %>%
+    mutate(latitude = EQLatitude, longitude = EQLongitude) %>%
+    select(survey, event_id, latitude, longitude)
   return(trawl_locations)
+}
+
+download_trawl_locations_gap <- function(connection, survey) {
+  print("Dowloading GAP trawl locations...")
+  year = floor(survey/100)
+  query = glue("SELECT 
+    racebase.haul.hauljoin, 
+    racebase.haul.cruise, 
+    racebase.haul.haul,
+    racebase.haul.duration, 
+    racebase.haul.distance_fished, 
+    racebase.haul.net_width, 
+    racebase.haul.start_latitude, 
+    racebase.haul.start_longitude
+    FROM racebase.haul
+    WHERE performance >= 0
+    AND haul_type in (3, 13)
+    AND region = 'BS'
+    AND stratum is not null
+    AND stationid is not null
+    and floor(cruise/100) = {year};")
+  trawl_locations_gap <- dbGetQuery(connection, query)
+  trawl_locations_gap <- cleanup(trawl_locations_gap) %>%
+    mutate(survey = cruise, event_id = -haul,
+      latitude = start_latitude, longitude=start_longitude) %>%
+    select(survey, event_id, latitude, longitude)
+  return(trawl_locations_gap)
 }
 
 download_length_weight_measurements <- function(connection, survey) {
   print("Downloading length-weight measurements...")
   length_weight = dbGetQuery(connection,
-                               glue("SELECT *
+                            glue("SELECT *
           FROM clamsbase2.measurements
           WHERE
           clamsbase2.measurements.survey = {survey}
@@ -146,7 +195,7 @@ download_acoustics <- function(connection, survey) {
 
   datasetid = 1
   zonemin = 1
-  zonemax = 1
+  zonemax = 3
   transectmin = 1
   transectmax = 999
   ship = lookup_survey_ship(survey)
@@ -161,9 +210,10 @@ download_acoustics <- function(connection, survey) {
   intervalsdata = mutate(intervalsdata, start_longitute = fixlongitude(start_longitude))
 
   cellsdata = left_join(cellsdata, intervalsdata, by=c("survey", "interval"))
+  cellsdata$class[cellsdata$zone %in% c(2, 3)] = "BT"
 
   integrated = cellsdata %>%
-    filter(zone <= zonemax) %>%
+    # filter(zone <= zonemax) %>%
     group_by(survey, transect, interval, class) %>%
     summarize(nasc = sum(prc_nasc), .groups="drop") %>%
     left_join(intervalsdata, by=c("survey", "interval", "transect")) %>%
@@ -173,12 +223,13 @@ download_acoustics <- function(connection, survey) {
   return(integrated)
 }
 
+
 download_survey <- function(connection, survey, data_set_id, analysis_id) {
   print(glue("Fetching data from survey {survey}"))
   trawl_locations <- download_trawl_locations(afsc, survey)
-  trawl_locations <- trawl_locations %>%
-    tidyr::pivot_wider(names_from=event_parameter, values_from=parameter_value)
+  trawl_locations_gap <- download_trawl_locations_gap(afsc, survey)
   scaling <- download_scaling(afsc, survey, data_set_id, analysis_id)
+  scaling_gap <- download_scaling_gap(afsc, survey)
   length_weight <- download_length_weight_measurements(afsc, survey)
   if (survey == 201608) {
     # hard-coded dataset 1 here because there is no dataset 2 for age-length data in 2016.
@@ -191,8 +242,10 @@ download_survey <- function(connection, survey, data_set_id, analysis_id) {
 
   surveydir = paste0("surveydata/", survey)
   dir.create(surveydir, showWarnings = FALSE)
-  write.csv(trawl_locations, paste0(surveydir, "/trawl_locations.csv"))
-  write.csv(scaling, paste0(surveydir, "/scaling.csv"))
+  write.csv(trawl_locations, paste0(surveydir, "/trawl_locations_mace.csv"))
+  write.csv(trawl_locations_gap, paste0(surveydir, "/trawl_locations_gap.csv"))
+  write.csv(scaling, paste0(surveydir, "/scaling_mace.csv"))
+  write.csv(scaling_gap, paste0(surveydir, "/scaling_gap.csv"))
   write.csv(length_weight, paste0(surveydir, "/measurements.csv"))
   write.csv(age_length, paste0(surveydir, "/age_length.csv"))
   write.csv(acoustics, paste0(surveydir, "/acoustics.csv"))
@@ -219,4 +272,9 @@ for (i in 1:nrow(survey.specs)) {
 }
 
 # Uncomment the line below and fill in the parameters to download a survey one-off
-download_survey(afsc, survey=202104, data_set_id=3, analysis_id=1)
+# download_survey(afsc, survey=202104, data_set_id=3, analysis_id=1)
+
+download_survey(afsc, 202207, 1, 1)
+
+species = cleanup(dbGetQuery(afsc, "SELECT * FROM clamsbase2.species;"))
+write.csv(species, "surveydata/species.csv")

@@ -32,11 +32,6 @@ export preprocess_survey_data,
     plot_boot_results,
     plot_error_sources
 
-# struct SurveyData
-#     acoustics
-#     scaling 
-#     trawl_locations
-# end
 
 include("preprocess_survey_data.jl")
 include("spatial.jl")
@@ -127,6 +122,7 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
     results = @showprogress map(1:nreplicates) do i
         selectivity_function = make_selectivity_function(bs.selectivity)
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
+        # below will need to check for BT/midwater trawl selectivity
         apply_selectivity!(scaling_boot, selectivity_function)
 
         predict_ts = make_ts_function(bs.predict_ts)
@@ -160,6 +156,10 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
             class = atbp.class,
             event_id = trawl_means.event_id[ii]
         )
+        # remove nearbottom intercept from nasc (from Nate's paper)
+        df.nasc[df.class .== "BT"] .-= nearbottom_intercept
+        df.nasc .= max.(df.nasc, 0)
+        
         df = @chain df begin
             leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
             leftjoin(category_comp, on=:event_id)
@@ -326,11 +326,12 @@ end
 
 function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paired_10,
         kwargs...)
+    xticks = sort(unique(results.age))
     p_abundance = @df results violin(:age, :n/1e9, group=:age, palette=palette,
-    xlabel="Age class", ylabel="Abundance (billions)", legend=false);
+        xlabel="Age class", ylabel="Abundance (billions)", legend=false);
     p_biomass = @df results violin(:age, :biomass/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Biomass (Mt)");
-    plot(p_abundance, p_biomass; size=size, margin=margin, kwargs...)
+    plot(p_abundance, p_biomass; xticks=xticks, size=size, margin=margin, kwargs...)
 end
 
 function plot_error_sources(stds_boot; xlims=(-0.005, 0.2), size=(700, 600), 
