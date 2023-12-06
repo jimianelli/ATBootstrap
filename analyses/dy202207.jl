@@ -34,20 +34,16 @@ acoustics = @subset(acoustics,
 surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
     surveydomain, dA)
 
-class_problems = map(scaling_classes) do class
-    println(class)
-    return ATBootstrapProblem(surveydata, class, nlags=15, weightfunc=h -> 1/h)
-end
+atbp = ATBootstrapProblem(surveydata, scaling_classes)
 
 # Inspect the variograms to make sure they look ok
-plot_class_variograms(class_problems, legend=:bottomright)
-
+plot_class_variograms(atbp, legend=:bottomright)
 
 # Check out a couple of conditional simulations
-plot_simulated_nasc(class_problems, surveydata, size=(1000, 600))
+plot_simulated_nasc(atbp, surveydata, size=(1000, 600))
 
 # Do the bootstrap uncertainty analysis
-results = simulate_classes(class_problems, surveydata, nreplicates = 500)
+results = simulate(atbp, surveydata, nreplicates = 500)
 plot_boot_results(results)
 CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
 

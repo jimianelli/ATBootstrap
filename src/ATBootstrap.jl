@@ -16,6 +16,7 @@ export preprocess_survey_data,
     get_survey_grid,
     read_survey_files,
     ATSurveyData,
+    ScalingClassProblem,
     ATBootstrapProblem,
     resample_df,
     nonneg_lusim,
@@ -23,7 +24,8 @@ export preprocess_survey_data,
     nonneg_lumult,
     nonneg_lumult!,
     solution_domain,
-    simulate_classes,
+    simulate_class,
+    simulate,
     stepwise_error,
     BootSpecs,
     error_labels,
@@ -65,7 +67,7 @@ end
 end
 BootSpecs(b::Bool) = BootSpecs(fill(b, length(fieldnames(BootSpecs)))...)
 
-struct ATBootstrapProblem
+struct ScalingClassProblem
     class
     variogram
     problem
@@ -77,26 +79,56 @@ struct ATBootstrapProblem
 end
 
 """
-    ATBootstrapProblem(surveydata, class[, cal_error=0.1, age_max=10,
+    ScalingClassProblem(surveydata, class[, cal_error=0.1, age_max=10,
         zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h])
 
-Set up an `ATBootstrapProblem`, specifying how to simulate bootstrap analyses of the 
+Set up a `ScalingClassProblem`, specifying how to simulate bootstrap analyses of the 
 scaling stratum `class` from the data in `surveydata`.
 """
-function ATBootstrapProblem(surveydata, class; cal_error=0.1, age_max=10,
-        zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h)
+function ScalingClassProblem(surveydata, class; 
+        cal_error=0.1, age_max=10, zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h)
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
     variogram, problem = define_conditional_sim(acoustics_sub, surveydata.domain,
         maxlag=maxlag, nlags=nlags, weightfunc=weightfunc)
     params = get_lungs_params(problem, variogram.model)
     optimal_dist = choose_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = get_zdists(optimal_dist, params)
-    return ATBootstrapProblem(class, variogram, problem, params, optimal_dist, zdists,
+    return ScalingClassProblem(class, variogram, problem, params, optimal_dist, zdists,
         cal_error, age_max)
 end
 
-function solution_domain(atbp::ATBootstrapProblem, variable=:nasc)
-    sol = solve(atbp.problem, LUGS(variable => (variogram = atbp.variogram.model,)))
+struct ATBootstrapProblem{TP<:ScalingClassProblem, TS<:AbstractString}
+    class_problems::Vector{TP}
+    scaling_classes::Vector{TS}
+end
+
+"""
+    ATBootstrapProblem(surveydata, scaling_classes[; cal_error=0.1, age_max=10,
+        zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
+        maxlag=200, nlags=10, weightfunc=h -> 1/h])
+
+Set up an `ATBootstrapProblem`, describing how to do bootstrap analyses of the 
+acoustic-trawl survey recorded in `surveydata` for the scaling strata specified in 
+`scaling_classes`.
+"""
+function ATBootstrapProblem(surveydata::ATSurveyData, scaling_classes::Vector{<:AbstractString};
+        cal_error=0.1, age_max=10, zdist_candidates=zdist_candidates, maxlag=200.0, 
+        nlags=10, weightfunc=h -> 1/h)
+    class_problems = map(scaling_classes) do class
+        println(class)
+        return ScalingClassProblem(surveydata, class, maxlag=maxlag, nlags=nlags,
+            age_max=age_max, cal_error=cal_error, weightfunc=weightfunc)
+    end
+    return ATBootstrapProblem(class_problems, scaling_classes)
+end
+
+"""
+Extract the simulation domain from a `ScalingClassProblem`. Returns a `DataFrame` with two
+columns containing the `x` and `y` coordinates of each point at which the spatial field 
+is to be simulated.
+"""
+function solution_domain(scp::ScalingClassProblem, variable=:nasc)
+    sol = solve(scp.problem, LUGS(variable => (variogram = scp.variogram.model,)))
     dom = domain(sol)
     x = [p.coords[1] for p in dom]
     y = [p.coords[2] for p in dom]
@@ -104,21 +136,21 @@ function solution_domain(atbp::ATBootstrapProblem, variable=:nasc)
 end
 
 """
-    simulate(atbp, surveydata; nreplicates=500, bs=BootSpecs())
+    simulate_class(scp, surveydata; nreplicates=500, bs=BootSpecs())
 
 Do a bootstrap analysis for one acoustic class/scaling stratum using the problem defined
-in `atbp` and the data in `surveydata`. The number of bootstrap replicates can optionally
+in `scp` and the data in `surveydata`. The number of bootstrap replicates can optionally
 be set in `nreplicates`, and the `BootSpecs` object `bs` can be used to specify if any of
 the error sources should be omitted (by default all are included).
 """
-function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicates=500, 
+function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nreplicates=500, 
         bs=BootSpecs())
 
-    scaling_sub = @subset(surveydata.scaling, :class .== atbp.class)
+    scaling_sub = @subset(surveydata.scaling, :class .== scp.class)
 
-    z0 = mean.(atbp.zdists)
+    z0 = mean.(scp.zdists)
 
-    println("Bootstrapping $(atbp.class)...")
+    println("Bootstrapping $(scp.class)...")
     results = @showprogress map(1:nreplicates) do i
         selectivity_function = make_selectivity_function(bs.selectivity)
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
@@ -126,7 +158,7 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
         apply_selectivity!(scaling_boot, selectivity_function)
 
         predict_ts = make_ts_function(bs.predict_ts)
-        predict_age = make_age_length_function(surveydata.age_length, atbp.age_max,
+        predict_age = make_age_length_function(surveydata.age_length, scp.age_max,
             bs.age_length)
         scaling_boot = DataFramesMeta.@transform(scaling_boot,
             :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length)/10),
@@ -140,26 +172,26 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
             @select(:x, :y, :ts, :length) 
             georef((:x, :y))
         end
-        all_ages = make_all_ages(scaling_boot, atbp.age_max)
-        all_categories = make_all_categories(scaling_boot, atbp.age_max)
+        all_ages = make_all_ages(scaling_boot, scp.age_max)
+        all_categories = make_all_categories(scaling_boot, scp.age_max)
         category_comp = proportion_at_category(scaling_boot, all_categories)
         age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
             all_ages, bs.weights_at_age)
         ii = trawl_assignments(coordinates.(surveydata.domain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
-        nasc = bs.nonneg_lusim ? nonneg_lusim(atbp) : nonneg_lumult(atbp.params, z0)
-        cal_error_sim = simulate_cal_error(atbp.cal_error,  bs.calibration)
+        nasc = bs.nonneg_lusim ? nonneg_lusim(scp) : nonneg_lumult(scp.params, z0)
+        cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
 
         df = DataFrame(
             nasc = nasc * cal_error_sim,
-            class = atbp.class,
+            class = scp.class,
             event_id = trawl_means.event_id[ii]
         )
         # remove nearbottom intercept from nasc (from Nate's paper)
         df.nasc[df.class .== "BT"] .-= nearbottom_intercept
         df.nasc .= max.(df.nasc, 0)
-        
+
         df = @chain df begin
             leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
             leftjoin(category_comp, on=:event_id)
@@ -187,11 +219,11 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
 end
 
 """
-    simulate_classes(class_problems, surveydata[; nreplicates=500, bs=BootSpecs(),
-        report_species=[21740], report_ages=1:first(class_problems).age_max)
+    simulate(atbp, surveydata[; nreplicates=500, bs=BootSpecs(),
+        report_species=[21740], report_ages=1:first(atbp.class_problems).age_max)
 
 Run a bootstrap uncertainty estimation for each scaling class, based on the
-`ATBootstrapProblem` definitions in `class_problems` and the data in `surveydata`. The
+`ATBootstrapProblem` definition in `atbp` and the data in `surveydata`. The
 number of bootstrap replicates can optionally be set in `nreplicates`, and the `BootSpecs`
 object `bs` can be used to specify if any of the error sources should be omitted (by
 default all are included).
@@ -204,11 +236,12 @@ optional `report_species` argument.
 
 For pollock, you can limit the ages reported by passing them to the `report_ages` argument.
 Note that this just subsets the results post-simulation; to set the maximum age see the 
-documentation for `ATBootstrapProblem.`
+documentation for `ScalingClassProblem.`
 """
-function simulate_classes(class_problems, surveydata; nreplicates=500, bs=BootSpecs(),
-        report_species=[21740], report_ages=1:first(class_problems).age_max)
-    class_results = map(p -> simulate(p, surveydata; nreplicates, bs), class_problems)
+function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicates=500,
+        bs=BootSpecs(), report_species=[21740], report_ages=1:first(atbp.class_problems).age_max)
+    
+    class_results = map(p -> simulate_class(p, surveydata; nreplicates, bs), atbp.class_problems)
     results = @chain vcat(class_results...) begin
         @subset(
             in(report_ages).(:age),
@@ -292,8 +325,8 @@ function read_survey_files(surveydir)
     #     surveydomain)
 end
 
-function plot_class_variograms(class_problems; size=(800, 600), kwargs...)
-    pp = map(class_problems) do cp
+function plot_class_variograms(atbp::ATBootstrapProblem; size=(800, 600), kwargs...)
+    pp = map(atbp.class_problems) do cp
         vg_emp = cp.variogram.empirical
         vg_mod = cp.variogram.model
         plot(vg_emp.abscissa, vg_emp.ordinate, title=cp.class, marker=:o,
@@ -303,24 +336,28 @@ function plot_class_variograms(class_problems; size=(800, 600), kwargs...)
     plot(pp...; size=size, kwargs...)
 end
 
-function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData,
-        simdomain=solution_domain(atbp); bubble_factor=3e-3)
-    sim_field = nonneg_lusim(atbp)
+function plot_simulated_nasc(scp::ScalingClassProblem, surveydata::ATSurveyData,
+        simdomain=solution_domain(scp); 
+        alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...)
+    sim_field = nonneg_lusim(scp)
+    df = @subset(surveydata.acoustics, :class .== scp.class)
+    bubble_factor = max_bubblesize ./ maximum(df.nasc)
+
     p = scatter(simdomain.x, simdomain.y, zcolor=sim_field, clims=(0, quantile(sim_field, 0.999)), 
-        markerstrokewidth=0, markershape=:square, title=string(atbp.class),
-        aspect_ratio=:equal, markersize=2.2, legend=false,
-        xlabel="Easting (km)", ylabel="Northing (km)")
-    df = @subset(surveydata.acoustics, :class .== atbp.class)
-    scatter!(p, df.x, df.y, color=:white, markersize=df.nasc*bubble_factor, alpha=0.3,
+        markerstrokewidth=0, markershape=:square, title=string(scp.class),
+        aspect_ratio=:equal, markersize=markersize, legend=false,
+        xlabel="Easting (km)", ylabel="Northing (km)", kwargs...)
+    scatter!(p, df.x, df.y, color=:white, markersize=df.nasc*bubble_factor, alpha=alpha,
         markerstrokewidth=0)
     return p
 end
 
-function plot_simulated_nasc(class_problems::Vector{<:ATBootstrapProblem},
-        surveydata::ATSurveyData, simdomain=solution_domain(first(class_problems)); 
-        bubble_factor=3e-3, kwargs...)
-    plots = [plot_simulated_nasc(p, surveydata, simdomain, bubble_factor=bubble_factor)
-        for p in class_problems]
+function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData, 
+        simdomain=solution_domain(first(atbp.class_problems));
+        alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...)
+    plots = map(atbp.class_problems) do classprob
+        plot_simulated_nasc(classprob, surveydata, simdomain)
+    end
     return plot(plots...; kwargs...)
 end
 
