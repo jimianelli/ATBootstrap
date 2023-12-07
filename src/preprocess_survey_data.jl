@@ -72,20 +72,33 @@ set the resolution of the sampling grid; they default to 10.0 (km).
 This function expects to find the following files, all of which come from running
 "download_survey.R":
 
-- scaling.csv : Specimen data from scaling_key_source_data
+- scaling_mace.csv : Specimen data from scaling_key_source_data
 - acoustics.csv : Acoustic NASC in 0.5 nmi intervals
-- trawl_locations.csv : Lat/Lon locations of all trawl events
+- trawl_locations_mace.csv : Lat/Lon locations of all MACE trawl events
 - measurements.csv : Length-weight measurements
+
+Additionally, if the option `ebs=true`, this function will expect the following two files
+to be present containing data from the Groundfish Assessment Program survey, which are 
+used to scale acoustic data in the bottom 3 m of the water column:
+
+- trawl_locations_gap.csv : Lat/Lon locations of all bottom trawls
+- scaling_gap.csv : Specimen data from racebase.specimen
 
 The preprocessing includes the following tasks:
 
 - Excluding NASC from non-scaling classes
+- If GAP data are present, merging them with the MACE data into unified `scaling` and
+`trawl_locations` data tables.
 - Geographic projection of spatial data
 - Downscaling acoustic resolution (specified by `dx` and `dy` arguments)
 - Calculating survey domain as concave hull of transect ends
 - Setting up simulation grid 
 - General tidying.
 
+The output from these pre-processing operations is written to new files in the same data
+directory:
+- scaling.csv : Formatted scaling key data (containing bottom trawls if they were included)
+- acoustics_projected.csv : Spatially-projected NASC by interval and scaling class.
 """
 function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
     scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame)

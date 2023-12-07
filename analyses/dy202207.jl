@@ -15,7 +15,7 @@ surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-preprocess_survey_data(surveydir, dx=resolution)
+preprocess_survey_data(surveydir, dx=resolution, ebs=true)
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = read_survey_files(surveydir)
 
