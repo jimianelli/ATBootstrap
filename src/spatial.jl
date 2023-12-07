@@ -24,7 +24,6 @@ Parameters for lower-upper non-gaussian simulation
 """
 function get_lungs_params(problem, variogram, variable=:nasc)
     solver = LUGS(variable => (variogram = variogram,))
-    # sol = solve(problem, solver)
     preproc = preprocess(problem, solver);
     params = preproc[Set([variable])][Set([variable])]
     return (data=params[1], μx=params[2], L=params[3], μ=params[4], dlocs=params[5], slocs=params[6])
@@ -46,11 +45,6 @@ function parameterize_zdists(Dist, lungs_params, ϵ=cbrt(eps()))
     return [Dist(p...) for p in dist_params.(Dist, μz, vz)]
 end
 
-# function nonneg_lumult!(x, params, z)
-#     data, μx, L, μ, data_locs, sim_locs = params
-#     x[sim_locs] = L * z
-#     x[data_locs] = data
-# end
 
 function nonneg_lumult(params, z)
     data, μx, L, μ, data_locs, sim_locs = params
@@ -128,7 +122,7 @@ nearest-trawl assignment) or probabilistically, weighted proportional to distanc
     pixel or trawl.
 - `stochastic=true` : Whether trawl assignment should be random (the default) or
     deterministic.
-- `a=1.9` : Magic number that 
+- `a=1.9` : Magic number 
 """
 function trawl_assignments(pixel_coords, trawl_coords, stochastic=true, a=1.9)
     # Calculate a k-dimensional tree for efficiently finding nearest neighbors

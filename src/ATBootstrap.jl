@@ -51,7 +51,7 @@ columns containing the `x` and `y` coordinates of each point at which the spatia
 is to be simulated.
 """
 function solution_domain(scp::ScalingClassProblem, variable=:nasc)
-    sol = solve(scp.problem, LUGS(variable => (variogram = scp.variogram.model,)))
+    sol = solve(scp.geoproblem, LUGS(variable => (variogram = scp.variogram.model,)))
     dom = domain(sol)
     x = [p.coords[1] for p in dom]
     y = [p.coords[2] for p in dom]
@@ -102,7 +102,7 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         ii = trawl_assignments(coordinates.(surveydata.domain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
-        nasc = bs.nonneg_lusim ? nonneg_lusim(scp) : nonneg_lumult(scp.params, z0)
+        nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
         cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
 
         df = DataFrame(
