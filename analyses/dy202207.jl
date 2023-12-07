@@ -1,9 +1,5 @@
-using CSV, DataFrames, DataFramesMeta, CategoricalArrays
-using GeoStats
+using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
-using Distributions
-using Random
-using ConcaveHull
 using StatsPlots, StatsPlots.PlotMeasures
 
 using Revise
@@ -29,7 +25,6 @@ acoustics = @subset(acoustics,
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
-
 
 surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
     surveydomain, dA)
