@@ -53,6 +53,7 @@ function merge_scaling(scaling_mace, scaling_gap)
         @select(:survey, :ship, :event_id, :class, :species_code,
             :primary_length, :ts_length, :ts_relationship, :catch_sampling_expansion,
             :user_defined_expansion, :sample_correction_scalar, :haul_weight, :w)
+        dropmissing()
     end
     return [scaling_mace1; scaling_gap1]
 end
