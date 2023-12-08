@@ -54,7 +54,8 @@ function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData,
         simdomain=solution_domain(first(atbp.class_problems));
         alpha=0.3, markersize=2.2, max_bubblesize=15, kwargs...)
     plots = map(atbp.class_problems) do classprob
-        plot_simulated_nasc(classprob, surveydata, simdomain)
+        plot_simulated_nasc(classprob, surveydata, simdomain; alpha=alpha,
+            markersize=markersize, max_bubblesize=max_bubblesize)
     end
     return plot(plots...; kwargs...)
 end
