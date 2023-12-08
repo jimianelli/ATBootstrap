@@ -1,12 +1,24 @@
 # const zdist_candidates = [Gamma, InverseGamma, InverseGaussian, LogNormal]
 
 """
-    define_conditional_sim(acoustics, surveydomain[; maxlag=200.0, nlags=10,
+    define_conditional_sim(acoustics, sim_domain[; maxlag=200.0, nlags=10,
         weigtfunc=h -> 1/h])
 
-Set up a conditional geostatistical simulation
+Set up a conditional geostatistical simulation, to probabilistically interpolate the
+observed NASC data in `acoustics` to the simulation points in `sim_domain`.
+
+An empirical variogram with `nlags` bins spaced evenly between 0 and `maxlag` is calculated
+for the supplied acoustic data. An exponential variogram model is then fitted to this
+empirical variogram via weighted least squares. By default the weighting function is 
+inverse to the lag distance.
+
+Returns a tuple with two elements:
+- `variogram` : `NamedTuple` containing the empirical and model variograms in fields 
+    `empirical` and `model`
+- `geoproblem` : `GeoStats.SimulationProblem` containing the specifications for the
+    simulation.
 """
-function define_conditional_sim(acoustics, surveydomain; maxlag=200.0, 
+function define_conditional_sim(acoustics, sim_domain; maxlag=200.0, 
         nlags=10, weightfunc=h -> 1/h)
     geonasc = acoustics[!, [:nasc, :x, :y]]
     geonasc.nasc .+= 1e-3 # add a small epsilon so no zeros
@@ -14,19 +26,30 @@ function define_conditional_sim(acoustics, surveydomain; maxlag=200.0,
     geonasc = georef(geonasc, (:x, :y))
     evg = EmpiricalVariogram(geonasc, :nasc, nlags=nlags, maxlag=maxlag)
     tvg = fit(ExponentialVariogram, evg, weightfunc)
-    prob = SimulationProblem(geonasc, surveydomain, :nasc => Float64, 1)
+    geoproblem = SimulationProblem(geonasc, sim_domain, :nasc => Float64, 1)
     variogram = (empirical = evg, model = tvg)
-    return (variogram, prob)
+    return (variogram, geoproblem)
 end
 
 """
-Parameters for lower-upper non-gaussian simulation
+    get_lungs_params(geoproblem, variogram[, variable=:nasc])
+
+Calculate the parameters for lower-upper non-gaussian simulation from a
+`GeoStats.SimulationProblem` and a `GeoStats.Variogram` model. If the variable to be 
+simulated is something other than `:nasc`, this can be specified with the optional
+`variable` argument. Returns a `NamedTuple` with the following fields:
+
+- `data` : Observed data for the conditional simulation
+- `μx` : Mean value at each simulation point
+- `L` : Lower-triangular Cholesky factor of the covariance matrix of simulated data points
+- `μ` : 
+- `dlocs`, `slocs` : Locations of data and simulation points.
 """
-function get_lungs_params(problem, variogram, variable=:nasc)
+function get_lungs_params(geoproblem, variogram, variable=:nasc)
     solver = LUGS(variable => (variogram = variogram,))
-    preproc = preprocess(problem, solver);
-    params = preproc[Set([variable])][Set([variable])]
-    return (data=params[1], μx=params[2], L=params[3], μ=params[4], dlocs=params[5], slocs=params[6])
+    preproc = preprocess(geoproblem, solver);
+    pars = preproc[Set([variable])][Set([variable])]
+    return (data=pars[1], μx=pars[2], L=pars[3], μ=pars[4], dlocs=pars[5], slocs=pars[6])
 end
 
 dist_params(d::Type{Gamma}, μ, v) = (v / μ, μ^2 / v)
@@ -34,6 +57,24 @@ dist_params(d::Type{InverseGaussian}, μ, v) = (μ, μ^3 / v)
 dist_params(d::Type{InverseGamma}, μ, v) = (μ^2 / v + 2, μ^3/v + μ)
 dist_params(d::Type{LogNormal}, μ, v) = ( log(μ) - log(v/exp(2log(μ)) + 1) / 2, sqrt(log(v/exp(2log(μ)) + 1)) )
 
+"""
+    parameterize_zdists(Dist, lungs_params[, ϵ=cbrt(eps())])
+
+Calculate the parameters of the white noise distributions driving a lower-upper
+nonnegative Gaussian simulation. Returns a vector of parameterized distributions from the 
+family specified by `Dist`, each with variance==1 and a mean that satisfies the
+requirements of the conditional simulation.
+
+# Arguments
+- `Dist` : A non-negative continuous `Distribution` type from Distributions.jl. Currently 
+    `Gamma`, `InverseGaussian`, `InverseGamma`, and `LogNormal` are supported.
+- `lungs_params` : Tuple of parameters describing the geostatistical conditional problem,
+    including the vector of desired mean values at the simulation points `μx` and the 
+    Cholesky triangle of their covariance matrix `L`.  These are obtained via
+    `get_lungs_params`.
+- `ϵ=cbrt(eps())` : Small value to add to zero-valued elements of the mean vectors. 
+    Ensures that each z-distribution has a nonzero mean/variance. 
+"""
 function parameterize_zdists(Dist, lungs_params, ϵ=cbrt(eps()))
     data, μx, L, μ, dlocs, slocs = lungs_params
     μx = copy(μx)
@@ -50,7 +91,6 @@ function nonneg_lumult(params, z)
     data, μx, L, μ, data_locs, sim_locs = params
     npts = length(data_locs) + length(sim_locs)
     x = zeros(npts)
-    # nonneg_lumult!(x, params, z)
     x[sim_locs] = L * z
     x[data_locs] = data
     return x
@@ -61,19 +101,46 @@ function nonneg_lusim(params, zdists)
     return nonneg_lumult(params, z)
 end
 
+"""
+    nonneg_lusim(scp::ScalingClassProblem)
+
+Generate a single conditional simulation of NASC based on the parameters defined in `scp`, 
+an instance of `ScalingClassProblem`.
+
+This function is an alias of `nonneg_lusim(scp::ScalingClassProblem)`
+"""
 function nonneg_lusim(scp::ScalingClassProblem)
     z = rand.(scp.zdists)
     return nonneg_lumult(scp.params, z)
 end
 
+"""
+    simulate_nasc(scp::ScalingClassProblem)
+
+Generate a single conditional simulation of NASC based on the parameters defined in `scp`, 
+an instance of `ScalingClassProblem`.
+
+This function is an alias of `nonneg_lusim(scp::ScalingClassProblem)`
+"""
 simulate_nasc(scp::ScalingClassProblem) = nonneg_lusim(scp)
 
+"""
+    choose_z_distribution(candidate_dists, nasc, lungs_params[; nreplicates=500, verbose=false])
 
-function choose_z_distribution(distributions, nasc, lungs_params; nreplicates=500, verbose=false)
+Choose the distribution from `candidate_dists` that best approximates the distribution of
+the observed data `nasc` when used to drive the conditional spatial simulation defined by
+`lungs_params`.
+
+Each of the candidates will be used to generate `nreplicates` conditional simulations 
+(default number is 500). A histogram of the simulated values (with logarithmic bins) is 
+calculated and compared to the histogram of the observed `nasc` via the Kullback-Liebler
+divergence; the candidate distribution family with the lowest average KLD is returned.
+"""
+function choose_z_distribution(candidate_dists, nasc, lungs_params; nreplicates=500, verbose=false)
     bin_edges = [0; 2 .^ (0:14)]
     h_nasc = normalize(fit(StatsBase.Histogram, nasc, bin_edges), mode=:density)
     fit_list = []
-    for Dist in distributions
+    for Dist in candidate_dists
         if verbose
             println("Comparing with $(Dist)...")
         end
@@ -140,7 +207,7 @@ function trawl_assignments(pixel_coords, trawl_coords, stochastic=true, a=1.9)
     
     for i in eachindex(assignments)
         if stochastic
-            # draw a random trawl index, with probability inversely related to distance
+            # draw a random trawl, with probability inversely related to distance
             trawl_idx = sample(idx[i], Weights(dists[i].^-a))
         else
             # assign pixel i to the nearest trawl
@@ -148,6 +215,5 @@ function trawl_assignments(pixel_coords, trawl_coords, stochastic=true, a=1.9)
         end
         assignments[i] = trawl_idx
     end
-    # trawl_assignments!(assignments, pixel_coords, trawl_coords, stochastic)
     return assignments
 end
