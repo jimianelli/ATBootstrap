@@ -3,14 +3,6 @@ library(glue)
 library(dplyr)
 library(stringr)
 
-species = dbGetQuery(connection,
-                    glue("SELECT
-      clamsbase2.species.species_code,
-      clamsbase2.species.scientific_name,
-      clamsbase2.species.common_name
-      FROM
-      clamsbase2.species;"))
-species = cleanup(species)
 
 cells_query <- function(survey, ship, datasetid, zonemax, zonemin) {
   sql = glue("SELECT
@@ -48,13 +40,10 @@ intervals_query <- function(survey, ship, datasetid, transectmax, transectmin) {
   return(sql)
 }
 
-
 cleanup <- function(df) {
   names(df) <- tolower(names(df))
   return(df)
 }
-
-
 
 download_scaling <- function(connection, survey, datasetid, analysisid) {
   sql = glue("SELECT *
@@ -68,8 +57,6 @@ download_scaling <- function(connection, survey, datasetid, analysisid) {
   scaling = select(scaling, ! FILTER_ID)
   scaling = select(scaling, ! SEX)
   scaling = cleanup(scaling)
-
-  print("Downloading species names...")
 
   scaling = scaling %>%
     left_join(species, by="species_code") %>%
@@ -226,7 +213,6 @@ download_acoustics <- function(connection, survey, ebs=TRUE) {
   return(integrated)
 }
 
-
 download_survey <- function(connection, survey, data_set_id, analysis_id, ebs=TRUE) {
   print(glue("Fetching data from survey {survey}"))
   trawl_locations <- download_trawl_locations(afsc, survey)
@@ -263,6 +249,16 @@ uid <- readline("Enter user ID: ")
 pwd <- readline(paste("Enter password for user", uid, ": "))
 afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
 
+species = dbGetQuery(afsc,
+                    glue("SELECT
+      clamsbase2.species.species_code,
+      clamsbase2.species.scientific_name,
+      clamsbase2.species.common_name
+      FROM
+      clamsbase2.species;"))
+species = cleanup(species)
+write.csv(species, "surveydata/species.csv")
+
 survey.specs <-data.frame(
   survey = c(200707, 200809, 200909, 201006, 201207, 201407, 201608, 201807, 202207),
   data_set_id = c(1,      1,      1,      1,      1,      1,      2,      1,      1),
@@ -279,7 +275,4 @@ for (i in 1:nrow(survey.specs)) {
 # Uncomment the line below and fill in the parameters to download a survey one-off
 # download_survey(afsc, survey=202104, data_set_id=3, analysis_id=1)
 
-download_survey(afsc, 202207, 1, 1)
-
-species = cleanup(dbGetQuery(afsc, "SELECT * FROM clamsbase2.species;"))
-write.csv(species, "surveydata/species.csv")
+# download_survey(afsc, 202207, 1, 1)
