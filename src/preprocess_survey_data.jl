@@ -62,6 +62,14 @@ function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
     return [trawl_locations_mace; trawl_locations_gap]
 end
 
+function tryparse_missing(type, str)
+    try
+        return parse(type, str)
+    catch
+        return missing
+    end
+end
+
 """
     preprocess_survey_data(surveydir[, dx=0.0, dy=dx])
 
@@ -168,6 +176,9 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
     rename!(lowercase, length_weight)
     length_weight = @chain length_weight begin
         unstack([:specimen_id, :species_code, :event_id], :measurement_type, :measurement_value)
+        DataFramesMeta.@transform(
+            :organism_weight = tryparse_missing.(Float64, :organism_weight)
+        )
         dropmissing()
     end
 
