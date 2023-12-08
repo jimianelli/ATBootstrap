@@ -189,21 +189,3 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
     CSV.write(joinpath(surveydir, "trawl_locations_projected.csv"), trawl_locations)
     CSV.write(joinpath(surveydir, "surveydomain.csv"), surveydomain)
 end
-
-
-# scaling_gap1 = @chain scaling_gap begin
-#     DataFramesMeta.@transform(
-#         :survey = :cruise,
-#         :ship = :vessel,
-#         :event_id = -:haul,
-#         :class = "BT",
-#         :primary_length = :length ./ 10,
-#         :catch_sampling_expansion = 1,
-#         :user_defined_expansion = 1,
-#         :sample_correction_scalar = 1,
-#     )
-#     @select(:survey, :ship, :event_id, :class, :species_code, :primary_length, 
-#         :catch_sampling_expansion, :user_defined_expansion, :sample_correction_scalar)
-# end
-# scaling1 = @select(scaling, :survey, :ship, :event_id, :class, :species_code, :primary_length, 
-#         :catch_sampling_expansion, :user_defined_expansion, :sample_correction_scalar)
