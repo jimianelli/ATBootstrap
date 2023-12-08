@@ -42,53 +42,15 @@ results = simulate(atbp, surveydata, nreplicates = 500)
 plot_boot_results(results)
 CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
 
-results_summary = @chain results begin
-    @orderby(:age)
-    @by(:age, 
-        :biomass_age = mean(:biomass),
-        :std = std(:biomass), 
-        :cv = std(:biomass) / mean(:biomass) * 100)
-end
+n_summary = summarize_bootstrap(results, :n)
+biomass_summary = summarize_bootstrap(results, :biomass)
 
 # One-at-a-time error analysis
 results_step = stepwise_error(atbp, surveydata; nreplicates = 500)
 
-stepwise_summary = @chain results_step begin
-    @orderby(:age)
-    @by([:added_error, :age], 
-        :biomass = mean(:biomass),
-        :std = std(:biomass), 
-        :cv = std(:biomass) / mean(:biomass) * 100)
-    leftjoin(select(results_summary, [:age, :std]), on=:age, makeunique=true)
-    DataFramesMeta.@transform(:std_decrease = :std ./ :std_1)
-end
-
-@df stepwise_summary plot(:age, :std/1e9, group=:added_error, marker=:o, 
-    markerstrokewidth=0, size=(1000, 600), margin=20px,# yscale=:log10,
-    xlabel="Age class", ylabel="S.D. (Biomass, MT)", title=survey)
-@df results_summary plot!(:age, :std/1e9, linewidth=2, marker=:o, label="All", 
-    color=:black)
-
+plot_error_source_by_age(results_step, results, :n)
     
-stepwise_totals = @by(results_step, [:added_error, :i], 
-    :n = sum(:n), 
-    :biomass = sum(:biomass))
-results_totals = @by(results, :i, 
-    :n = sum(:n), 
-    :biomass = sum(:biomass),
-    :added_error = "All")
-
-results_totals = @chain [results_totals; stepwise_totals] begin
-    leftjoin(error_labels, on=:added_error)
-end
+results_totals = merge_results(results, results_step)
 CSV.write(joinpath(@__DIR__, "results", "stepwise_error_$(survey).csv"), results_totals)
 
-stds_boot = map(1:1000) do i
-    df = resample_df(results_totals)
-    @by(df, :error_label, 
-        :n_cv = iqr(:n) / mean(:n) ,
-        :biomass_cv = iqr(:biomass) / mean(:biomass))
-end 
-stds_boot = vcat(stds_boot...)
-
-plot_error_sources(stds_boot, plot_title=survey)
+plot_error_sources(results_totals, plot_title=survey, xticks=0:0.01:0.15, size=(800, 500))

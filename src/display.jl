@@ -74,13 +74,80 @@ function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paire
     plot(p_abundance, p_biomass; xticks=xticks, size=size, margin=margin, kwargs...)
 end
 
+"""
 
-function plot_error_sources(stds_boot; xlims=(-0.005, 0.2), size=(700, 600), 
-        kwargs...)
+"""
+function plot_error_sources(results_totals; xlims=nothing, kwargs...)
+    stds_boot = map(1:1000) do i
+        df = resample_df(results_totals)
+        @by(df, :error_label, 
+            :n_cv = std(:n) / mean(:n) ,
+            :biomass_cv = std(:biomass) / mean(:biomass))
+    end 
+    stds_boot = vcat(stds_boot...)
+    
+    if xlims == nothing
+        xmax = max(maximum(stds_boot.n_cv), maximum(stds_boot.biomass_cv)) * 1.05
+        xlims = (-0.005, xmax)
+    end
     p1 = @df stds_boot boxplot(:error_label, :n_cv, permute=(:x, :y), xflip=true,
         outliers=false, ylabel="C.V. (Numbers)");
     p2 = @df stds_boot boxplot(:error_label, :biomass_cv, permute=(:x, :y), xflip=true,
         outliers=false, ylabel="C.V. (Biomass)");
     plot(p1, p2; layout=(2,1), legend=false, ylabel="Error source",
-        size=size, xlims=xlims, kwargs...)
+        xlims=xlims, kwargs...)
+end
+
+function summarize_bootstrap(results, variable=:n; species_codes=21740)
+    in_spp = in(species_codes)
+    @chain results begin
+        stack([:n, :biomass])
+        @subset(in_spp.(:species_code), :variable .== string(variable))
+        @orderby(:age)
+        @by(:age, 
+            :mean = mean(:value),
+            :std = std(:value), 
+            :cv = std(:value) / mean(:value) * 100
+        )
+        rename(:mean => variable)
+    end
+end
+
+function summarize_stepwise_bootstrap(results, variable=:n; species_codes=21740)
+    in_spp = in(species_codes)
+    @chain results begin
+        stack([:n, :biomass])
+        @subset(in_spp.(:species_code), :variable .== string(variable))
+        @orderby(:age)
+        @by([:added_error, :age], 
+            :mean = mean(:value),
+            :std = std(:value), 
+            :cv = std(:value) / mean(:value) * 100
+        )
+        rename(:mean => variable)
+    end
+end
+
+function plot_error_source_by_age(results_step, results, variable=:n; species_codes=21740, kwargs...)
+    stepwise_summary = summarize_stepwise_bootstrap(results_step, variable; 
+        species_codes=species_codes) 
+    results_summary = summarize_bootstrap(results, variable; species_codes=species_codes)
+    @df stepwise_summary plot(:age, :std/1e9, group=:added_error, marker=:o, 
+        markerstrokewidth=0, xlabel="Age class", ylabel="S.D. (Biomass, MT)", kwargs...)
+    @df results_summary plot!(:age, :std/1e9, linewidth=2, marker=:o, label="All", 
+        color=:black)    
+end
+
+function merge_results(results, results_step, variable=:n)
+    stepwise_totals = @by(results_step, [:added_error, :i], 
+        :n = sum(:n), 
+        :biomass = sum(:biomass))
+    results_totals = @by(results, :i, 
+        :n = sum(:n), 
+        :biomass = sum(:biomass),
+        :added_error = "All")
+
+    return @chain [results_totals; stepwise_totals] begin
+        leftjoin(error_labels, on=:added_error)
+    end
 end

@@ -32,7 +32,12 @@ export preprocess_survey_data,
     plot_class_variograms,
     plot_simulated_nasc,
     plot_boot_results,
-    plot_error_sources
+    plot_error_sources,
+    plot_error_source_by_age,
+    summarize_bootstrap,
+    summarize_stepwise_bootstrap,
+    merge_results
+
 
 include("types.jl")
 include("preprocess_survey_data.jl")
@@ -43,7 +48,7 @@ include("mace_selectivity.jl")
 include("mace_length_weight.jl")
 include("calibration.jl")
 include("scaling.jl")
-include("plotting.jl")
+include("display.jl")
 
 """
 Extract the simulation domain from a `ScalingClassProblem`. Returns a `DataFrame` with two
@@ -75,6 +80,7 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
 
     println("Bootstrapping $(scp.class)...")
     results = @showprogress map(1:nreplicates) do i
+
         selectivity_function = make_selectivity_function(bs.selectivity)
         scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
         apply_selectivity!(scaling_boot, selectivity_function)
@@ -99,6 +105,7 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         category_comp = proportion_at_category(scaling_boot, all_categories)
         age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
             all_ages, bs.weights_at_age)
+        
         ii = trawl_assignments(coordinates.(surveydata.domain), 
                     coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
 
@@ -112,7 +119,7 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         )
         # remove nearbottom intercept from nasc (from Nate's paper)
         df.nasc[df.class .== "BT"] .-= nearbottom_intercept
-        df.nasc .= max.(df.nasc, 0)
+        df.nasc .= max.(df.nasc, 0) # make sure we don't end up with negative backscatter
 
         df = @chain df begin
             leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
@@ -200,15 +207,9 @@ end
 
 # Ordered, categorical labels for stepwise error results
 error_labels = DataFrame(
-    added_error = ["calibration", "nonneg_lusim", "selectivity", "resample_scaling",
+    added_error = ["calibration", "simulate_nasc", "selectivity", "resample_scaling",
         "drop_trawl", "trawl_assignments", "predict_ts", "age_length", "weights_at_age", "All"],
     error_label = CategoricalArray(
-        # ["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
-        # "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length",
-        # "All"],
-        # levels=["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
-        # "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length",
-        # "All"]
         ["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
         "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"],
         levels=["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
