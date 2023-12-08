@@ -62,14 +62,6 @@ function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
     return [trawl_locations_mace; trawl_locations_gap]
 end
 
-function tryparse_missing(type, str)
-    try
-        return parse(type, str)
-    catch
-        return missing
-    end
-end
-
 """
     preprocess_survey_data(surveydir[, dx=0.0, dy=dx])
 
@@ -108,14 +100,19 @@ directory:
 - scaling.csv : Formatted scaling key data (containing bottom trawls if they were included)
 - acoustics_projected.csv : Spatially-projected NASC by interval and scaling class.
 """
-function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
-    scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame)
-    trawl_locations_mace = CSV.read(joinpath(surveydir, "trawl_locations_mace.csv"), DataFrame)
+function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx, 
+        missingstring=[".", "NA"])
+    scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame,
+        missingstring=missingstring)
+    trawl_locations_mace = CSV.read(joinpath(surveydir, "trawl_locations_mace.csv"), DataFrame,
+        missingstring=missingstring)
 
     if ebs
-        scaling_gap = CSV.read(joinpath(surveydir, "scaling_gap.csv"), DataFrame)
+        scaling_gap = CSV.read(joinpath(surveydir, "scaling_gap.csv"), DataFrame,
+            missingstring=missingstring)
         scaling = merge_scaling(scaling_mace, scaling_gap)
-        trawl_locations_gap = CSV.read(joinpath(surveydir, "trawl_locations_gap.csv"), DataFrame)
+        trawl_locations_gap = CSV.read(joinpath(surveydir, "trawl_locations_gap.csv"), DataFrame,
+            missingstring=missingstring)
         trawl_locations = merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
     else
         scaling = scaling_mace
@@ -124,7 +121,8 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
     
     scaling_classes = unique(scaling.class)
 
-    acoustics = CSV.read(joinpath(surveydir, "acoustics.csv"), DataFrame)
+    acoustics = CSV.read(joinpath(surveydir, "acoustics.csv"), DataFrame,
+        missingstring=missingstring)
     acoustics = @chain acoustics begin
         @select(:transect,
                 :interval, 
@@ -172,13 +170,11 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx)
         @subset([in_hull([x, y], surveyhull) for (x, y) in zip(:x, :y)])
     end
 
-    length_weight = CSV.read(joinpath(surveydir, "measurements.csv"), DataFrame)
+    length_weight = CSV.read(joinpath(surveydir, "measurements.csv"), DataFrame,
+        missingstring=missingstring)
     rename!(lowercase, length_weight)
     length_weight = @chain length_weight begin
         unstack([:specimen_id, :species_code, :event_id], :measurement_type, :measurement_value)
-        DataFramesMeta.@transform(
-            :organism_weight = tryparse_missing.(Float64, :organism_weight)
-        )
         dropmissing()
     end
 
