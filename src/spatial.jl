@@ -162,26 +162,17 @@ function choose_z_distribution(candidate_dists, nasc, lungs_params; nreplicates=
     return dist_fits.distribution[argmin(dist_fits.mean_kld)]    
 end
 
-# function avg_nearest_neighbor_distance(coords)
-#     kdtree = KDTree(coords)
-#     _, dist = knn(kdtree, coords, 2, true)
-#     return mean(last.(dist))
-# end
-
-# function calculate_exponent(pixel_coords, trawl_coords, kdtree)
-#     center_pixel = mean(pixel_coords)
-#     d = avg_nearest_neighbor_distance(trawl_coords) / 2
-
-#     idx, dist = knn(kdtree, center_pixel, length(trawl_coords), true)
-
-# end
-
-
 """
-    trawl_assignments(pixel_coords, trawl_coords[, stochastic=true, a=1.9])
+    trawl_assignments(pixel_coords, trawl_coords[, stochastic=true[; nneighbors=4, a=1.9]])
 
 Assign each acoustic cell to a trawl, either deterministically (i.e. a standard MACE 
-nearest-trawl assignment) or probabilistically, weighted proportional to distance^-a.
+nearest-trawl assignment) or randomly. By default, the random trawl is drawn from one of
+the 4 nearest trawls to the acoustic cell, with probability proportional to 1/distance^2.
+The number of neighboring trawls and the inverse-distance exponent can be set using the
+optional `nneighbors` and `a` keyword arguments.
+
+Returns a vector the same length as `pixel_coords`, each element of which is an integer 
+index pointing to one of the trawls in `trawl_coords`.
 
 # Arguments
 - `pixel_coords`, `trawl_coords` : Vectors of coordinates for the acoustic cells and 
@@ -189,9 +180,12 @@ nearest-trawl assignment) or probabilistically, weighted proportional to distanc
     pixel or trawl.
 - `stochastic=true` : Whether trawl assignment should be random (the default) or
     deterministic.
-- `a=1.9` : Magic number 
+- `nneighbors = 4` : Number of neighboring trawls to draw from
+- `a = 2` : Exponent for inverse distance weights for trawl assignment.
 """
-function trawl_assignments(pixel_coords, trawl_coords, stochastic=true, a=1.9)
+function trawl_assignments(pixel_coords, trawl_coords, stochastic=true; 
+        nneighbors=4, a=2)
+    nneighbors = min(nneighbors, length(trawl_coords))
     # Calculate a k-dimensional tree for efficiently finding nearest neighbors
     kdtree = KDTree(trawl_coords)
     #=
@@ -201,7 +195,7 @@ function trawl_assignments(pixel_coords, trawl_coords, stochastic=true, a=1.9)
     The ith element of dists is a vector of distances to the trawls indexed by idx.
     This means that the jth element of dists[i] is the distance from pixel i to trawl j.
     =#
-    idx, dists = knn(kdtree, pixel_coords, length(trawl_coords))
+    idx, dists = knn(kdtree, pixel_coords, nneighbors)#length(trawl_coords))
     # allocate an empty vector for the trawl assignments
     assignments = Vector{Int}(undef, length(pixel_coords))
     
