@@ -51,7 +51,7 @@ function make_all_categories(scaling, age_max, aged_species=[21740])
     all_categories = @chain [with_ages; without_ages] begin
         @orderby(:event_id, :species_code, :age)
         DataFramesMeta.@transform(
-            :category = [join([s, "@", a]) for (s, a) in zip(:species_code, :age)]
+            :category = [string(s) * "@" * string(a) for (s, a) in zip(:species_code, :age)]
         )
     end
     return all_categories
@@ -77,9 +77,9 @@ function proportion_at_category(scaling, all_categories, aged_species=[21740])
     scaling.category .= ""
     for (i, r) in enumerate(eachrow(scaling))
         if use_ages(r.species_code)
-            scaling[i, :category] = join([r.species_code, "@", r.age])
+            scaling.category[i] = string(r.species_code) * "@" * string(r.age)
         else
-            scaling[i, :category] = join([r.species_code, "@", "-1"])
+            scaling.category[i] = string(r.species_code) * "@-1"
         end
     end
     comp = @chain scaling begin

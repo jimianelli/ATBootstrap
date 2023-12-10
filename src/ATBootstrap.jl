@@ -38,7 +38,6 @@ export preprocess_survey_data,
     summarize_stepwise_bootstrap,
     merge_results
 
-
 include("types.jl")
 include("preprocess_survey_data.jl")
 include("spatial.jl")

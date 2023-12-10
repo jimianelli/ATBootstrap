@@ -45,15 +45,12 @@ function make_selectivity_function(stochastic=true)
 end
 
 function apply_selectivity!(scaling, selectivity_function)
-    for i in 1:nrow(scaling)
-        species_code = scaling[i, :species_code]
-        class = scaling[i, :class]
-        L = scaling[i, :primary_length]
-        if species_code == 21740 && class != "BT"
-            scaling[i, :sample_correction_scalar] = 1 / selectivity_function(L)
-            scaling[i, :w] = scaling[i, :catch_sampling_expansion] .*
-                scaling[i, :user_defined_expansion] .*
-                scaling[i, :sample_correction_scalar] .* scaling[i, :haul_weight]
+    for (i, r) in enumerate(eachrow(scaling))
+        L = r.primary_length
+        if r.species_code == 21740 && r.class != "BT"
+            scaling.sample_correction_scalar[i] = 1 / selectivity_function(L)
+            scaling.w[i] = r.catch_sampling_expansion * r.user_defined_expansion *
+                r.sample_correction_scalar * r.haul_weight
         end
     end
 end

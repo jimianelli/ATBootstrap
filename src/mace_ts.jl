@@ -65,7 +65,7 @@ sandlance_ts(L) = 56.5log10(L) - 125.1
 squids_ts(L) = 20log10(L) - 75.4
 standard_pollock_ts(L) = 20log10(L) - 66
 
-ts_lookup = Dict(                   # TS function (38 kHz, length in cm)    stdev
+const ts_lookup = Dict(                   # TS function (38 kHz, length in cm)    stdev
     "age0_pollock" =>               TSSpec(age0_pollock_ts,                 TS_SE_DEFAULT),
     "arctic_cod" =>                 TSSpec(arctic_cod_ts,                   TS_SE_DEFAULT),
     "capelin" =>                    TSSpec(capelin_ts,                      TS_SE_DEFAULT),
