@@ -78,6 +78,19 @@ function ScalingClassProblem(surveydata, class;
         cal_error, age_max)
 end
 
+"""
+Extract the simulation domain from a `ScalingClassProblem`. Returns a `DataFrame` with two
+columns containing the `x` and `y` coordinates of each point at which the spatial field 
+is to be simulated.
+"""
+function solution_domain(scp::ScalingClassProblem, variable=:nasc)
+    sol = solve(scp.geoproblem, LUGS(variable => (variogram = scp.variogram.model,)))
+    dom = domain(sol)
+    x = [p.coords[1] for p in dom]
+    y = [p.coords[2] for p in dom]
+    return DataFrame(x=x, y=y)
+end
+
 struct ATBootstrapProblem{TP<:ScalingClassProblem, TS<:AbstractString}
     class_problems::Vector{TP}
     scaling_classes::Vector{TS}
