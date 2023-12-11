@@ -35,7 +35,7 @@ atbp = ATBootstrapProblem(surveydata, scaling_classes)
 plot_class_variograms(atbp, legend=:bottomright)
 
 # Check out a couple of conditional simulations
-plot_simulated_nasc(atbp, surveydata, size=(1000, 600))
+plot_simulated_nasc(atbp, surveydata, size=(1000, 600), markersize=1.3)
 
 # Do the bootstrap uncertainty analysis
 results = simulate(atbp, surveydata, nreplicates = 500)
