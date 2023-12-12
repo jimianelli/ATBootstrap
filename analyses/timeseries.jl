@@ -108,10 +108,7 @@ df_pred.cv = predict(m, df_pred)
     color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)")
 @df df_pred plot!(:cv_1d, :cv, group=:variable, color=[2 1])
 
-
 @by(annual, :variable, :ratio = median(:cv ./ :cv_1d))
-
-
 
 plots_n = map(unique(results.year)) do year
     xt = year == 2022 ? collect(1:10) : false
