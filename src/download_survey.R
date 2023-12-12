@@ -244,9 +244,10 @@ download_survey <- function(connection, survey, data_set_id, analysis_id, ebs=TR
 }
 
 
-
-uid <- readline("Enter user ID: ")
-pwd <- readline(paste("Enter password for user", uid, ": "))
+cat("Enter user ID: ")
+uid <- readLines("stdin", n=1)
+cat(paste0("Enter password for user ", uid, ": "))
+pwd <- readLines("stdin", n=1)
 afsc <- dbConnect(odbc(), "AFSC", UID=uid, PWD=pwd)
 
 species = dbGetQuery(afsc,
