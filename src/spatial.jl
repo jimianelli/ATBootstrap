@@ -25,7 +25,7 @@ function define_conditional_sim(acoustics, sim_domain; maxlag=200.0,
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
     evg = EmpiricalVariogram(geonasc, :nasc, nlags=nlags, maxlag=maxlag)
-    tvg = fit(ExponentialVariogram, evg, weightfunc)
+    tvg = Variography.fit(ExponentialVariogram, evg, weightfunc)
     geoproblem = SimulationProblem(geonasc, sim_domain, :nasc => Float64, 1)
     variogram = (empirical = evg, model = tvg)
     return (variogram, geoproblem)
