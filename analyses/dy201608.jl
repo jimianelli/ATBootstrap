@@ -2,7 +2,7 @@ using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
 using StatsPlots, StatsPlots.PlotMeasures
 
-includet(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
+include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 using .ATBootstrap
 
 survey = "201608"

@@ -87,14 +87,14 @@ plot(p_n, p_b, layout=(2, 1), size=(800, 600), margin=20px, dpi=300)
 savefig(joinpath(@__DIR__, "plots", "timeseries.png"))
 
 
-#=
-1D vs Bootstrap
-=#
-
-p_cv = @df annual plot(:year, :cv, group=:variable, 
+# 1D vs Bootstrap
+# Plot time series of CV
+p_cv = @df annual plot(:year .- 2000, :cv, group=:variable, 
     label=["Biomass bootstrap" "Abundance bootstrap"], color=[2 1],
-    marker=:o, xticks=2007:2022, ylabel="CV (%)", size=(800, 600), margin=20px)
-@df eva plot!(p_cv, :year, :cv_1d, label="1D geostatistical", marker=:o)
+    marker=:o, xticks=07:22, ylabel="CV (%)", size=(800, 600), margin=20px)
+@df eva plot!(p_cv, :year .- 2000, :cv_1d, label="1D geostatistical", marker=:o)
+
+# Fit bootstrap vs. EVA linear models
 m_n = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "n"))
 m_biomass = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "biomass"))
 m = lm(@formula(cv ~ cv_1d * variable), annual)
@@ -104,9 +104,12 @@ df_pred = DataFrame(
 )
 df_pred.cv = predict(m, df_pred)
 
-@df annual scatter(:cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
+# plot regressions
+p_reg = @df annual scatter(:cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
     color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)")
-@df df_pred plot!(:cv_1d, :cv, group=:variable, color=[2 1])
+@df df_pred plot!(p_reg, :cv_1d, :cv, group=:variable, color=[2 1])
+
+plot(p_cv, p_reg, size=(1000, 300))
 
 @by(annual, :variable, :ratio = median(:cv ./ :cv_1d))
 
