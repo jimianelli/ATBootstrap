@@ -1,5 +1,6 @@
 using CSV, DataFrames, DataFramesMeta, CategoricalArrays
 using Statistics, StatsBase
+using GLM
 using StatsPlots, StatsPlots.PlotMeasures
 using ColorSchemes
 
@@ -29,6 +30,7 @@ histogram(year_age.cv)
 quantile(year_age.cv, [0.1, 0.9])
 unstack(year_age, :age, :year, :cv)
 
+# EVA-estimated CVs from cruise reports
 eva = DataFrame(
     year = [2007, 2008, 2009, 2010, 2012, 2014, 2016, 2018, 2022],
     cv_1d =   round.([.045, .076, .088, .060, .042, .046, .021, .044, .068] * 100, digits=1)
@@ -42,51 +44,70 @@ p1 = @df @subset(totals, :variable.=="n") density(:value, group=:year,
 p2 = @df @subset(totals, :variable.=="biomass") density(:value, group=:year,
     xlabel="Biomass (MT)", palette=:Paired_9)
 plot(p1, p2, fill=true, fillalpha=0.5, size=(1000, 500), margin=20px)
-savefig(joinpath(@__DIR__, "total_cv_distributions.png"))
+savefig(joinpath(@__DIR__, "plots", "total_cv_distributions.png"))
 
 qqps = map(unique(totals.year)) do year
     df = @subset(totals, :year .== year)
-    # p1 = @df @subset(df, :variable.=="n") qqnorm(:value)
-    @df @subset(df, :variable.=="biomass") qqnorm(:value, title=year)
+    @df @subset(df, :variable.=="biomass") qqnorm(:value, title=year, markerstrokewidth=0)
 end
 plot(qqps..., size=(800, 800))
+savefig(joinpath(@__DIR__, "plots", "qq_normal_plots.png"))
 
 annual = @chain results begin
     @by([:survey, :year, :variable, :i], 
         :value = sum(:value) / 1e9)
     @by([:survey, :year, :variable],
-        :upper = quantile(:value, 0.95),
-        :lower = quantile(:value, 0.05),
+        :upper = quantile(:value, 0.975),
+        :lower = quantile(:value, 0.025),
         :std = std(:value),
         :value = mean(:value))
     @transform(:cv = round.(:std ./ :value * 100, digits=1))
     leftjoin(eva, on=:year)
     @transform(:cvstring = " " .* string.(:cv) .* " (" .* string.(:cv_1d) .* ")")
+    @orderby(:variable, :year)
 end
+
+@by(annual, :variable, :cv = mean(:cv))
+
+p_n = @df @subset(totals, :variable .== "n") violin(:year, :value, 
+    linewidth=0, xlabel="Year", ylabel="Abundance (billions)")
 
 p_n = @df @subset(annual, :variable .== "n") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), 
-    series_annotation=text.(:cvstring, :left, :bottom, 10),
-    # series_annotation=text.(" " .* string.(:cv), :left, :bottom, 10),
+    series_annotation=text.(:cvstring, :left, :bottom, 9),
     marker=:o, color=1, label="",
-    xticks=2007:2022, xlims=(2006.5, 2024), ylims=(0, 32),
+    xticks=2007:2022, xlims=(2006.5, 2024), ylims=(0, 40),
     xlabel="Year", ylabel="Abundance (billions)")
 p_b = @df @subset(annual, :variable .== "biomass") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), marker=:o, color=2, label="",
-    series_annotation=text.(:cvstring, :left, :bottom, 10),
-    # series_annotation=text.(" " .* string.(:cv), :left, :bottom, 10),
+    series_annotation=text.(:cvstring, :left, :bottom, 9),
     xticks=2007:2022, xlims=(2006.5, 2024), ylims=(0, 7.5),
     xlabel="Year", ylabel="Biomass (MT)")
 plot(p_n, p_b, layout=(2, 1), size=(800, 600), margin=20px, dpi=300)
-savefig(joinpath(@__DIR__, "timeseries.png"))
+savefig(joinpath(@__DIR__, "plots", "timeseries.png"))
 
 
-@df annual scatter(:cv, :cv_1d, group=:variable, label=["Biomass" "Abundance"],
-    color=[2 1], xlims=(0, 30), ylims=(0, 30))
+#=
+1D vs Bootstrap
+=#
 
-@df annual plot(:year, :cv, group=:variable, label=["Biomass" "Abundance"], color=[2 1],
+p_cv = @df annual plot(:year, :cv, group=:variable, 
+    label=["Biomass bootstrap" "Abundance bootstrap"], color=[2 1],
     marker=:o, xticks=2007:2022, ylabel="CV (%)", size=(800, 600), margin=20px)
-@df eva plot!(:year, :cv_1d, label="1D geostats", marker=:o)
+@df eva plot!(p_cv, :year, :cv_1d, label="1D geostatistical", marker=:o)
+m_n = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "n"))
+m_biomass = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "biomass"))
+m = lm(@formula(cv ~ cv_1d * variable), annual)
+df_pred = DataFrame(
+    cv_1d = repeat(1:10.0, outer=2),
+    variable=repeat(["n", "biomass"], inner=10)
+)
+df_pred.cv = predict(m, df_pred)
+
+@df annual scatter(:cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
+    color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)")
+@df df_pred plot!(:cv_1d, :cv, group=:variable, color=[2 1])
+
 
 @by(annual, :variable, :ratio = median(:cv ./ :cv_1d))
 
