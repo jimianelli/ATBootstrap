@@ -102,6 +102,7 @@ end
 function summarize_bootstrap(results, variable=:n; species_codes=21740)
     in_spp = in(species_codes)
     @chain results begin
+        stack([:n, :biomass])
         @subset(in_spp.(:species_code), :variable .== string(variable))
         @orderby(:age)
         @by(:age, 
