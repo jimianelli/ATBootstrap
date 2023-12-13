@@ -20,8 +20,19 @@ scaling_classes = ["PK1", "PK1_FILTERED", "BT"]
 acoustics = @subset(acoustics, in(scaling_classes).(:class), :transect .< 200)
 
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
-    markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
+    markersize=:nasc/200, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
+
+
+p_xsects = @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/200,
+    alpha=0.5, title="(a)", titlealign=:left)
+p_trawls = @df @subset(trawl_locations, :event_id .< 0) scatter(:x, :y, label="Bottom",
+    markersize=2, title="(b)", titlealign=:left)
+@df @subset(trawl_locations, :event_id .> 0) scatter!(p_trawls, :x, :y, label="Midwater",
+    markersize=3)
+plot(p_xsects, p_trawls, xlabel="Easting (km)", ylabel="Northing (km)", aspect_ratio=:equal,
+    markerstrokewidth=0, xlims=(-250, 800), size=(700, 400), dpi=300)
+savefig(joinpath(@__DIR__, "plots", "DY201807_maps.png"))
 
 surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
     surveydomain, dA)
@@ -41,6 +52,13 @@ CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
 
 n_summary = summarize_bootstrap(results, :n)
 biomass_summary = summarize_bootstrap(results, :biomass)
+
+@chain results begin
+    stack([:n, :biomass])
+    @subset(:species_code .== 21740)
+    @by([:i, :variable], :value = sum(:value))
+    @by(:variable, :cv = std(:value) / mean(:value))
+end
 
 # One-at-a-time error analysis
 results_step = stepwise_error(atbp, surveydata; nreplicates = 500)

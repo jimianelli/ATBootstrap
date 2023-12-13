@@ -89,10 +89,11 @@ savefig(joinpath(@__DIR__, "plots", "timeseries.png"))
 
 # 1D vs Bootstrap
 # Plot time series of CV
-p_cv = @df annual plot(:year .- 2000, :cv, group=:variable, 
+p_cv = @df annual plot(:year, :cv, group=:variable, ylims=(0, 30),
     label=["Biomass bootstrap" "Abundance bootstrap"], color=[2 1],
-    marker=:o, xticks=07:22, ylabel="CV (%)", size=(800, 600), margin=20px)
-@df eva plot!(p_cv, :year .- 2000, :cv_1d, label="1D geostatistical", marker=:o)
+    marker=:o, xticks=2008:2:2022, xlabel="Year", ylabel="C.V. (%)",
+    title="(a)", titlealign=:left)
+@df eva plot!(p_cv, :year, :cv_1d, label="1D geostatistical", marker=:o)
 
 # Fit bootstrap vs. EVA linear models
 m_n = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "n"))
@@ -102,14 +103,18 @@ df_pred = DataFrame(
     cv_1d = repeat(1:10.0, outer=2),
     variable=repeat(["n", "biomass"], inner=10)
 )
-df_pred.cv = predict(m, df_pred)
+df_pred = [df_pred predict(m, df_pred, interval=:confidence)]
 
 # plot regressions
-p_reg = @df annual scatter(:cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
-    color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)")
-@df df_pred plot!(p_reg, :cv_1d, :cv, group=:variable, color=[2 1])
+p_reg = @df df_pred plot(:cv_1d, :prediction, 
+    ribbon=(:prediction .- :lower, :upper .- :prediction), 
+    group=:variable, color=[2 1], fillalpha=0.2, label="")
+@df annual scatter!(p_reg, :cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
+    color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)",
+    title="(b)", titlealign=:left)
 
-plot(p_cv, p_reg, size=(1000, 300))
+plot(p_cv, p_reg, size=(900, 350), margin=15px)
+savefig(joinpath(@__DIR__, "plots", "bootstrap_vs_1d.png"))
 
 @by(annual, :variable, :ratio = median(:cv ./ :cv_1d))
 
@@ -193,8 +198,6 @@ end
 
 error_series = DataFramesMeta.@transform(error_series, 
     :error_label = CategoricalArray(:error_label, 
-        # levels=["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
-        # "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length", "All"])
         levels=["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
         "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"])
 )
@@ -206,7 +209,7 @@ pe2 = @df @subset(error_series, :variable.=="Biomass") plot(:year, :cv, group=:e
     ylabel="C.V. (Biomass)", palette=:tableau_10)
 plot(pe1, pe2, marker=:o, layout=(2,1), legend=:outerright, ylims=(-0.01, 0.45),
     linewidth=3, xticks=2007:2022, size=(1000, 600), margin=20px)
-savefig(joinpath(@__DIR__, "error_timeseries.png"))
+savefig(joinpath(@__DIR__, "plots", "error_timeseries.png"))
 
 
 error_summary = @chain error_series begin
@@ -215,7 +218,7 @@ error_summary = @chain error_series begin
         :cv_max = quantile(:cv, 0.75),
         :cv_min = quantile(:cv, 0.25),
         :cv_se = std(:cv) / sqrt(length(:cv)),
-        :cv = mean(:cv),
+        :cv_mean = mean(:cv),
         :cv_med = median(:cv))
 end 
 @df error_summary groupedbar(:error_label, :cv, yerror=(:cv_min, :cv_max), group=:variable,
@@ -224,6 +227,6 @@ end
 
 
 @df @orderby(error_series, :error_label) groupedboxplot(:error_label, :cv * 100, group=:variable, 
-    outliers=false, permute=(:x, :y), xflip=true, legend=:right,
-    ylabel="C.V. (%)", size=(600, 500), dpi=300)
-savefig(joinpath(@__DIR__, "error_sources.png"))
+    outliers=false, permute=(:x, :y), xflip=true, legend=:right, yminorgrid=true,
+    ylabel="C.V. (%)", size=(500, 400), dpi=300)
+savefig(joinpath(@__DIR__, "plots", "error_sources.png"))
