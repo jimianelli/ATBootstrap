@@ -24,3 +24,16 @@ nearbottom_coefs = @chain leftjoin(species, nearbottom_coefs, on=:nearbottom_gro
     @select(:species_code, :user_defined_expansion = :a)
 end
 
+function make_nearbottom_dict(stochastic=true)
+    
+end
+
+function apply_nearbottom_selectivity!(scaling, nearbottom_dict)
+    for (i, r) in enumerate(eachrow(scaling))
+        if r.species_code == 21740 && r.class == "BT"
+            scaling.user_defined_expansion[i] = nearbottom_dict[r.species_code]
+            scaling.w[i] = r.catch_sampling_expansion * r.user_defined_expansion *
+                r.sample_correction_scalar * r.haul_weight
+        end
+    end
+end
