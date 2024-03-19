@@ -89,8 +89,8 @@ savefig(joinpath(@__DIR__, "plots", "timeseries.png"))
 
 # 1D vs Bootstrap
 # Plot time series of CV
-p_cv = @df annual plot(:year, :cv, group=:variable, ylims=(0, 30),
-    label=["Biomass bootstrap" "Abundance bootstrap"], color=[2 1],
+p_cv = @df annual plot(:year, :cv, group=:variable, ylims=(0, 35),
+    label=["Bootstrap (biomass)" "Bootstrap (abundance)"], color=[2 1],
     marker=:o, xticks=2008:2:2022, xlabel="Year", ylabel="C.V. (%)",
     title="(a)", titlealign=:left)
 @df eva plot!(p_cv, :year, :cv_1d, label="1D geostatistical", marker=:o)
@@ -111,7 +111,7 @@ p_reg = @df df_pred plot(:cv_1d, :prediction,
     group=:variable, color=[2 1], fillalpha=0.2, label="")
 @df annual scatter!(p_reg, :cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
     color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)",
-    title="(b)", titlealign=:left)
+    title="(b)", titlealign=:left, legend=:bottomright)
 
 plot(p_cv, p_reg, size=(900, 350), margin=15px)
 savefig(joinpath(@__DIR__, "plots", "bootstrap_vs_1d.png"))
@@ -125,7 +125,7 @@ plots_n = map(unique(results.year)) do year
         xticks=xt, xlabel="", ylabel="")
 end
 plot(plots_n..., layout=(10, 1), size=(600, 900), left_margin=20px)
-savefig(joinpath(@__DIR__, "abundance.png"))
+savefig(joinpath(@__DIR__, "plots", "abundance.png"))
 
 plots_b = map(unique(results.year)) do year
     xt = year == 2022 ? collect(1:10) : false
@@ -135,7 +135,7 @@ plots_b = map(unique(results.year)) do year
     # scatter!(p, [1], [0], alpha=0, label=year)
 end
 plot(plots_b..., layout=(10, 1), size=(600, 900), left_margin=20px)
-savefig(joinpath(@__DIR__, "biomass.png"))
+savefig(joinpath(@__DIR__, "plots", "biomass.png"))
 
 
 ebs_error_files = joinpath.(@__DIR__, "results", "stepwise_error_" .* ebs_surveys .* ".csv")
