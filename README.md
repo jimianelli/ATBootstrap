@@ -62,15 +62,15 @@ Julia ships with an excellent built-in package manager. It is standard practice 
 a new "package environment" for each project you create, which records all the packages
 you need for the analysis, as well as their specific versions. This is makes it easy to
 reproduce the analysis on another computer, among other benefits. The packages and their 
-versions are recorded in the `Project.toml` file in the root directory of the project.
-You don't have to interact with this file directly, instead you do everything through the
-built-in package manager. You can read more about this in the 
+versions are recorded in the `Project.toml` and `Manifest.toml` files in the root
+directory of the project. You don't have to interact with this file directly, instead you
+do everything through the built-in package manager. You can read more about this in the 
 [Julia manual](https://docs.julialang.org/en/v1/stdlib/Pkg/), but the following 
 instructions will get you started here.
 
 7. In VSCode, press `Alt-J` `Alt-O` to open a Julia REPL. It will show up at the bottom
 of your screen.
-8. Type `]` to enter Julia's package-manager mode. If the prompt says `(@v1.9) pkg>`, 
+8. Type `]` to enter Julia's package-manager mode. If the prompt says `(@v1.10) pkg>`, 
 you are in the global package environment. Type `activate .` and press Enter to activate
 the environment for this project.
 9. The prompt should now say `(ATBootstrap) pkg>`. Type `instantiate` and press Enter. 
