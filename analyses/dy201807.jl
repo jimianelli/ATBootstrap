@@ -39,6 +39,45 @@ surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_l
 
 atbp = ATBootstrapProblem(surveydata, scaling_classes)
 
+#=
+Plotting example conditional simulations
+=#
+using GeoStats
+cp1 = first(atbp.class_problems)
+sim_domain = domain(cp1.geoproblem)
+sim_coords = coordinates.(sim_domain)
+
+nasc_plots = map(1:6) do _ 
+    nasc = ATBootstrap.simulate_nasc(cp1)
+    scatter(first.(sim_coords), last.(sim_coords), zcolor=nasc, markershape=:square,
+        markerstrokewidth=0, markersize=1.7, legend=false, aspect_ratio=:equal,
+        clim=(0, 3000), xlabel="Easting (km)", ylabel="Northing (km)")
+end
+plot(nasc_plots..., layout=(2, 3), size=(1200, 800), margin=15px)
+savefig(joinpath(@__DIR__, "plots", "conditional_nasc.png"))
+#=
+Plotting example trawl assignments
+=#
+tl1 = georef(@subset(trawl_locations, :event_id .> 1), (:x, :y))
+trawl_coords = coordinates.(domain(tl1))
+trawl_assignments_det = ATBootstrap.trawl_assignments(sim_coords, trawl_coords, false)
+trawl_assignments_rand= ATBootstrap.trawl_assignments(sim_coords, trawl_coords, true)
+
+ms = 1.8
+pal = :Set1_9
+p1 = scatter(first.(sim_coords), last.(sim_coords), color=trawl_assignments_det,
+    markershape=:square, markerstrokewidth=0, markersize=ms, legend=false, palette=pal,
+    title="(a)", titlealign=:left)
+scatter!(p1, first.(trawl_coords), last.(trawl_coords), color=:black, markersize=4)
+p2 = scatter(first.(sim_coords), last.(sim_coords), color=trawl_assignments_rand,
+    markershape=:square, markerstrokewidth=0, markersize=ms, legend=false, palette=pal,
+    title="(b)", titlealign=:left)
+scatter!(p2, first.(trawl_coords), last.(trawl_coords), color=:black, markersize=4)
+plot(p1, p2, xlabel="Easting (km)", ylabel="Northing (km)", aspect_ratio=:equal,
+    markerstrokewidth=0, xlims=(-250, 800), size=(900, 400), dpi=300, 
+    bottom_margin=15px)
+savefig(joinpath(@__DIR__, "plots", "trawl_assignments.png"))
+
 # Inspect the variograms to make sure they look ok
 plot_class_variograms(atbp, legend=:bottomright)
 
