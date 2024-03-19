@@ -50,7 +50,7 @@ of  the list. Click Install.
 
 ### Getting the code
 
-5. Download the project from GitHub (https://github.com/ElOceanografo/ATBootstrap) and 
+5. Download the project from GitHub (https://github.com/noaa-afsc-mace/ATBootstrap) and 
 save it wherever you keep your work.
 6. In VSCode, go to File > Open Folder and choose the "ATBootstrap" folder you just 
 downloaded. You should see the file structure show up in the tray at the left of your
