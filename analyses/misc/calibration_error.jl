@@ -7,9 +7,11 @@ using StatsPlots
 function alpha(frequency, salinity=34.0, temperature=27.0, depth=10.0, pH=8.1)
     return -20log10(absorption(frequency, 1, salinity, temperature, depth, pH)) 
 end
-register_primitive_multi(alpha) # make it work with Particles type
 
-# Following values from Haris et al. 2018, ICES JMS 75
+# make it work with Particles type from MonteCarloMeasurements
+register_primitive_multi(alpha) 
+
+# Following values are from Haris et al. 2018, ICES JMS 75
 # ES38-DD column of Table 3
 G0_sd = [0.29, 0.06, 0.04, 0.17, 0.10, 0.18, 0.17, 0.14, 0.12, 0.22, 0.1]
 G0_n = [9, 10, 7, 9, 6, 11, 9, 9, 9, 4, 4]
@@ -23,12 +25,16 @@ G0_error = mean(G0_sd)
 ψ_error = mean(ψ_sd)
 
 
-T_true = 3.0
-S_true = 32.5
-r_true = 100                    # True range to target/volume (m)
-c_true = soundspeed(T_true, S_true, r_true)  # True sound speed (m/s)
-T = T_true±3
-S = S_true±1
+T_true = 2.0
+S_true = 32.0
+T_assumed = 4.0
+S_assumed = 33.0
+ΔT = T_assumed - T_true
+ΔS = S_assumed - S_true
+r_true = 100                                # True range to target/volume (m)
+c_true = soundspeed(T_true, S_true, r_true) # True sound speed (m/s)
+T = T_true±1 - ΔT
+S = S_true±0.5 - ΔT
 
 f = 38e3                        # Frequency (Hz)
 c = soundspeed(T, S, r_true)    # Assumed sound speed (m/s)
@@ -41,16 +47,11 @@ pt = 1000                       # Transmitted power (W)
 ψ = exp10((-21±ψ_error) / 10)   # EBA (sr)
 G0 = 0±G0_error                 # On-axis gain (logarithmic, dB)
 g0 = exp10(G0 / 10)             # On-axis gain (linear, unitless)
-
-# add something in for linearity
+g_linearity = 1.01±0.02         # Factor to correct for linearity
 
 # Sv = Pr + 20log10(r) + 2α*r - 10log10((pt * λ^2 * g0^2 * c * τ * ψ) / 32(π^2))
-gains = 20log10(r) + 2α*r - 10log10((pt * λ^2 * g0^2 * c * τ * ψ) / 32(π^2))
+gains = 20log10(r) + 2α*r - 10log10((pt * λ^2 * g_linearity * g0^2 * c * τ * ψ) / 32(π^2))
 uncertainty = gains - mean(gains.particles)
 plot(uncertainty)
-std(uncertainty.particles)
-
-
-
-
-
+pstd(uncertainty)
+pmean(uncertainty)
