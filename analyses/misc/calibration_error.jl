@@ -52,6 +52,8 @@ g_linearity = 1.01±0.02         # Factor to correct for linearity
 # Sv = Pr + 20log10(r) + 2α*r - 10log10((pt * λ^2 * g0^2 * c * τ * ψ) / 32(π^2))
 gains = 20log10(r) + 2α*r - 10log10((pt * λ^2 * g_linearity * g0^2 * c * τ * ψ) / 32(π^2))
 uncertainty = gains - mean(gains.particles)
-plot(uncertainty)
-pstd(uncertainty)
-pmean(uncertainty)
+
+cal_sd = pstd(uncertainty)
+plot(uncertainty, normalize=true, label="", linewidth=0, foreground_color_legend=nothing,
+    xlabel="Calibration error (dB)", ylabel="Probability density")
+vline!([-cal_sd, cal_sd], label="S.D. = $(round(cal_sd, sigdigits=2)) dB", color=:black)
