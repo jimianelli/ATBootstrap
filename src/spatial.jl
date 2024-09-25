@@ -25,14 +25,14 @@ function define_conditional_sim(acoustics, sim_domain; maxlag=200.0,
     geonasc.x .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
     evg = EmpiricalVariogram(geonasc, :nasc, nlags=nlags, maxlag=maxlag)
-    tvg = Variography.fit(ExponentialVariogram, evg, weightfunc)
-    geoproblem = SimulationProblem(geonasc, sim_domain, :nasc => Float64, 1)
+    tvg = GeoStatsFunctions.fit(ExponentialVariogram, evg, weightfunc)
+    setup = GeoStatsProcesses.randsetup(sim_domain, geonasc, 1)
     variogram = (empirical = evg, model = tvg)
-    return (variogram, geoproblem)
+    return (variogram, setup)
 end
 
 """
-    get_lungs_params(geoproblem, variogram[, variable=:nasc])
+    get_lungs_params(geoproblem, theoretical_variogram[, variable=:nasc])
 
 Calculate the parameters for lower-upper non-gaussian simulation from a
 `GeoStats.SimulationProblem` and a `GeoStats.Variogram` model. If the variable to be 
@@ -45,10 +45,18 @@ simulated is something other than `:nasc`, this can be specified with the option
 - `μ` : 
 - `dlocs`, `slocs` : Locations of data and simulation points.
 """
-function get_lungs_params(geoproblem, variogram, variable=:nasc)
-    solver = LUGS(variable => (variogram = variogram,))
-    preproc = preprocess(geoproblem, solver);
-    pars = preproc[Set([variable])][Set([variable])]
+function get_lungs_params(setup, theoretical_variogram, variable=:nasc)
+    # solver = LUGS(variable => (variogram = variogram,))
+    # preproc = preprocess(geoproblem, solver);
+    # pars = preproc[Set([variable])][Set([variable])]
+    prep = GeoStatsProcesses.randprep(
+        Random.TaskLocalRNG(),
+        GeoStatsProcesses.GaussianProcess(theoretical_variogram),
+        GeoStatsProcesses.LUMethod(),
+        setup
+    )
+    pars = prep[variable]
+    # (z₁, d₂, L₂₂, μ, dlocs, slocs)
     return (data=pars[1], μx=pars[2], L=pars[3], μ=pars[4], dlocs=pars[5], slocs=pars[6])
 end
 

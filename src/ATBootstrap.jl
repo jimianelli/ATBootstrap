@@ -1,6 +1,7 @@
 module ATBootstrap
 
 using CSV, DataFrames, DataFramesMeta, CategoricalArrays
+using Random
 using GeoStats, Geodesy, ConcaveHull
 using Statistics, StatsBase
 using Distributions

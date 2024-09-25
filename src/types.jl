@@ -49,7 +49,7 @@ BootSpecs(b::Bool) = BootSpecs(fill(b, length(fieldnames(BootSpecs)))...)
 struct ScalingClassProblem
     class
     variogram
-    geoproblem
+    geosetup
     params
     zfamily
     zdists
@@ -69,12 +69,12 @@ function ScalingClassProblem(surveydata, class;
         cal_error=0.1, age_max=10, maxlag=200.0, nlags=20, weightfunc=h -> 1/h,
         zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal])
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
-    variogram, geoproblem = define_conditional_sim(acoustics_sub, surveydata.domain,
+    variogram, geosetup = define_conditional_sim(acoustics_sub, surveydata.domain,
         maxlag=maxlag, nlags=nlags, weightfunc=weightfunc)
-    params = get_lungs_params(geoproblem, variogram.model)
+    params = get_lungs_params(geosetup, variogram.model)
     optimal_dist = choose_z_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = parameterize_zdists(optimal_dist, params)
-    return ScalingClassProblem(class, variogram, geoproblem, params, optimal_dist, zdists,
+    return ScalingClassProblem(class, variogram, geosetup, params, optimal_dist, zdists,
         cal_error, age_max)
 end
 
@@ -84,10 +84,11 @@ columns containing the `x` and `y` coordinates of each point at which the spatia
 is to be simulated.
 """
 function solution_domain(scp::ScalingClassProblem, variable=:nasc)
-    sol = solve(scp.geoproblem, LUGS(variable => (variogram = scp.variogram.model,)))
-    dom = domain(sol)
-    x = [p.coords[1] for p in dom]
-    y = [p.coords[2] for p in dom]
+    # sol = solve(scp.geosetup, LUGS(variable => (variogram = scp.variogram.model,)))
+    # dom = domain(sol)
+    dom = scp.geosetup.domain
+    x = [p.coords.x for p in dom]
+    y = [p.coords.y for p in dom]
     return DataFrame(x=x, y=y)
 end
 

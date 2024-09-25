@@ -6,9 +6,10 @@ function plot_class_variograms(atbp::ATBootstrapProblem; size=(800, 600), kwargs
     pp = map(atbp.class_problems) do cp
         vg_emp = cp.variogram.empirical
         vg_mod = cp.variogram.model
-        plot(vg_emp.abscissa, vg_emp.ordinate, title=cp.class, marker=:o,
+        x = [lag.val for lag in vg_emp.abscissa]
+        plot(x, vg_emp.ordinate, title=cp.class, marker=:o,
             label="Empirical", xlabel="Lag (km)", ylabel="γ", legend=:bottomright)
-        plot!(h -> vg_mod(h), 0, maximum(vg_emp.abscissa), label="Model")
+        plot!(h -> vg_mod(h), 0, maximum(x), label="Model")
     end
     plot(pp...; size=size, kwargs...)
 end
