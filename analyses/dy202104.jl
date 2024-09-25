@@ -7,16 +7,16 @@ using ConcaveHull
 using StatsPlots, StatsPlots.PlotMeasures
 
 include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
-using .ATBootstrap
+import .ATBootstrap as ATB
 
 survey = "202104"
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-preprocess_survey_data(surveydir, resolution)
+ATB.preprocess_survey_data(surveydir, resolution)
 
-(; acoustics, scaling, age_length, length_weight, trawl_locations, domain) = read_survey_files(surveydir)
+(; acoustics, scaling, age_length, length_weight, trawl_locations, domain) = ATB.read_survey_files(surveydir)
 
 
 # Only do the outer shelf transects for now
@@ -48,23 +48,23 @@ domain = DataFrames.shuffle(domain) # this seems to fix the issue with direction
 domain =  PointSet(Matrix(domain)')
 
 # Set up problem
-surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
+surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
     domain)
 
 class_problems = map(scaling_classes) do class
     println(class)
-    return ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
+    return ATB.ATBootstrapProblem(surveydata, class, dA, nlags=15, weightfunc=h -> 1/h)
 end
 
 # Inspect the variograms to make sure they look ok
-plot_class_variograms(class_problems, legend=:bottomright)
+ATB.plot_class_variograms(class_problems, legend=:bottomright)
 
 # Check out conditional simulations
-plot_simulated_nasc(class_problems, surveydata, size=(1000, 600))
+ATB.plot_simulated_nasc(class_problems, surveydata, size=(1000, 600))
 
 # Do the bootstrap uncertainty analysis
-results = simulate_classes(class_problems, surveydata, nreplicates = 500)
-plot_boot_results(results)
+results = ATB.simulate_classes(class_problems, surveydata, nreplicates = 500)
+ATB.plot_boot_results(results)
 CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
 
 results_summary = @chain results begin
@@ -76,7 +76,7 @@ results_summary = @chain results begin
 end
 
 # One-at-a-time error analysis
-results_step = stepwise_error(class_problems, surveydata; nreplicates = 500)
+results_step = ATB.stepwise_error(class_problems, surveydata; nreplicates = 500)
 
 stepwise_summary = @chain results_step begin
     @orderby(:age)
