@@ -2,21 +2,29 @@ using CSV
 using DataFrames
 using DataFramesMeta
 using Turing
-# using ReverseDiff
 using StatsPlots, StatsPlots.PlotMeasures
 
-Turing.setadbackend(:forwarddiff)
-
-calfile = joinpath(@__DIR__, "../surveydata/calibration_results.csv")
+calfile = joinpath(@__DIR__, "../../surveydata/calibration_results.csv")
 cals = CSV.read(calfile, DataFrame)
 cals = @chain cals begin
-    @subset(.!ismissing.(:sphere_id), .!ismissing.(:pulse_length))
+    @subset(
+        .!ismissing.(:sphere_id),
+        .!ismissing.(:pulse_length),
+        .!ismissing.(:sa_corr_calc)
+    )
     @orderby(:sounder, :pulse_length, :sphere_id)
     @transform(:sounder_pulse = :sounder .* " " .* string.(:pulse_length) .* " ms")
 end
 
-@by(cals, [:sounder_pulse, :sphere_id], 
-    :n=length(:sa_corr_calc))
+cal_summary = @chain cals begin
+    @by([:sounder, :pulse_length, :sphere_id], 
+        :n = length(:sa_corr_calc),
+        :sd = std(:sa_corr_calc))
+    @subset(:n .> 1)
+    @transform(:se = :sd ./ sqrt.(:n))
+end
+sa_std = mean(cal_summary.sd[isfinite.(cal_summary.sd) .& (.! ismissing.(cal_summary.sd))])
+exp10(sa_std / 10)
 
 date_ids = indexin(cals.date, unique(cals.date))
 sphere_ids = indexin(cals.sphere_id, unique(cals.sphere_id))

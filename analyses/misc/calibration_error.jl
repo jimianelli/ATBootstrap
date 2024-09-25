@@ -22,19 +22,25 @@ G0_error = mean(G0_sd)
 ψ_sd = [0.17, 0.18, 0.28, 0.13, 0.25, 0.13, 0.2, 0.22]
 ψ_n = [6, 15, 7, 4, 5, 5, 5, 10]
 ψ_se = ψ_sd ./ sqrt.(ψ_n)
-ψ_error = mean(ψ_sd)
+# ψ_error = mean(ψ_sd)
+ψ_bias = 10log10.(1 .+ 0.01 * [-28, -25, -25, -25, -21, -15, -19, -21, -17, -16, 
+    -19, -12, 08, -8, -5, -8, -5, -5, 
+    -6, -8, -3, -5, -1, -5, -8, -10, -5])
+ψ_error = abs(mean(ψ_bias))
 
 
-T_true = 2.0
-S_true = 32.0
+T_true = [3.183706, 4.978313, 5.260582, 3.837085]
+S_true = [32.187052, 32.437675, 32.339063, 32.363523]
 T_assumed = 4.0
 S_assumed = 33.0
-ΔT = T_assumed - T_true
-ΔS = S_assumed - S_true
+ΔT = T_assumed .- T_true
+ΔS = S_assumed .- S_true
+mean(ΔT), std(ΔT)
+mean(ΔS), std(ΔS)
 r_true = 100                                # True range to target/volume (m)
-c_true = soundspeed(T_true, S_true, r_true) # True sound speed (m/s)
-T = T_true±1 - ΔT
-S = S_true±0.5 - ΔT
+c_true = soundspeed(mean(T_true), mean(S_true), r_true) # True sound speed (m/s)
+T = T_assumed±std(ΔT)
+S = S_assumed±std(ΔS)
 
 f = 38e3                        # Frequency (Hz)
 c = soundspeed(T, S, r_true)    # Assumed sound speed (m/s)
@@ -45,12 +51,14 @@ r = t * c / 2                   # Inferred/observed range (m)
 τ = 1.024e-3                    # Pulse length (s)
 pt = 1000                       # Transmitted power (W)
 ψ = exp10((-21±ψ_error) / 10)   # EBA (sr)
+# ψ = exp10((-21) / 10)   # EBA (sr)
 G0 = 0±G0_error                 # On-axis gain (logarithmic, dB)
 g0 = exp10(G0 / 10)             # On-axis gain (linear, unitless)
 g_linearity = 1.01±0.02         # Factor to correct for linearity
+Δsphere = 0±0.05                # Difference of sphere TS from theoretical
 
 # Sv = Pr + 20log10(r) + 2α*r - 10log10((pt * λ^2 * g0^2 * c * τ * ψ) / 32(π^2))
-gains = 20log10(r) + 2α*r - 10log10((pt * λ^2 * g_linearity * g0^2 * c * τ * ψ) / 32(π^2))
+gains = 20log10(r) + 2α*r - 10log10((pt * λ^2 * g_linearity * g0^2 * c * τ * ψ) / 32(π^2)) + Δsphere
 uncertainty = gains - mean(gains.particles)
 
 cal_sd = pstd(uncertainty)
