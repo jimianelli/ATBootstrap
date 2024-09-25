@@ -1,7 +1,7 @@
 include("nearbottom.jl")
 
 function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
-    w = transect_width / 2
+    w = transect_width / 2 * 1.852
     transect_ends = @chain acoustics begin
         @orderby(:y)
         @by(:transect, 
