@@ -230,7 +230,7 @@ function read_survey_files(surveydir)
     length_weight = CSV.read(joinpath(surveydir, "length_weight.csv"), DataFrame)
     surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
     surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
-    surveydomain =  PointSet(Matrix(surveydomain)')
+    surveydomain =  PointSet(Point(x...) for x in eachrow(surveydomain))
     return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
     # return ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
     #     surveydomain)
