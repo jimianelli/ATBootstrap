@@ -60,6 +60,8 @@ end
 
 
 function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
+    survey = only(unique(trawl_locations_mace.survey))
+    trawl_locations_gap.survey .= survey
     return [trawl_locations_mace; trawl_locations_gap]
 end
 
