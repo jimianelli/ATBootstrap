@@ -122,10 +122,14 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
         trawl_locations = trawl_locations_mace
     end
     
-    scaling_classes = unique(scaling.class)
-
     acoustics = CSV.read(joinpath(surveydir, "acoustics.csv"), DataFrame,
         missingstring=missingstring)
+
+    # Merge "filtered" strata with main ones
+    scaling.class .= replace.(scaling.class, "_FILTERED" => "")
+    acoustics.class .= replace.(acoustics.class, "_FILTERED" => "")
+    scaling_classes = unique(scaling.class)
+
     acoustics = @chain acoustics begin
         @select(:transect,
                 :interval, 
