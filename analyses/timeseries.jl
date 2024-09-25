@@ -221,10 +221,6 @@ error_summary = @chain error_series begin
         :cv_mean = mean(:cv),
         :cv_med = median(:cv))
 end 
-@df error_summary groupedbar(:error_label, :cv, yerror=(:cv_min, :cv_max), group=:variable,
-    xrotation=45, xlabel="Individual uncertainty source", ylabel="C.V.",
-    size=(600, 500))
-
 
 @df @orderby(error_series, :error_label) groupedboxplot(:error_label, :cv * 100, group=:variable, 
     outliers=false, permute=(:x, :y), xflip=true, legend=:right, yminorgrid=true,
