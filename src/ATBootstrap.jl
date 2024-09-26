@@ -8,6 +8,7 @@ using Distributions
 using LinearAlgebra
 using Distances
 using NearestNeighbors
+using StaticArrays
 using ProgressMeter
 using RCall
 using StatsPlots, StatsPlots.PlotMeasures
@@ -51,6 +52,10 @@ include("calibration.jl")
 include("scaling.jl")
 include("display.jl")
 
+"""
+    Extract the bare x and y values from a `Point` as an `SVector`.
+"""
+svector_coords(pt::Point) = SVector(pt.coords.x.val, pt.coords.y.val)
 
 """
     simulate_class(scp, surveydata; nreplicates=500, bs=BootSpecs())
@@ -95,8 +100,8 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
             all_ages, bs.weights_at_age)
         
-        ii = trawl_assignments(coordinates.(surveydata.domain), 
-                    coordinates.(domain(geotrawl_means)), bs.trawl_assignments)
+        ii = trawl_assignments(svector_coords.(surveydata.domain), 
+                    svector_coords.(domain(geotrawl_means)), bs.trawl_assignments)
 
         nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
         cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
