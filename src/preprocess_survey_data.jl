@@ -1,21 +1,86 @@
 include("nearbottom.jl")
 
-function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
-    w = transect_width / 2 * 1.852
-    transect_ends = @chain acoustics begin
-        @orderby(:y)
-        @by(:transect, 
-            :x = [first(:x) + w, first(:x) - w, last(:x) + w, last(:x) - w], 
-            :y = [first(:y), first(:y), last(:y), last(:y)])
-    end
-    v = [[row.x, row.y] for row in eachrow(transect_ends)]
-    surveyhull = concave_hull(v, k)
+# function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
+#     w = transect_width / 2 * 1.852
+#     transect_ends = @chain acoustics begin
+#         @orderby(:y)
+#         @by(:transect, 
+#             :x = [first(:x) + w, first(:x) - w, last(:x) + w, last(:x) - w], 
+#             :y = [first(:y), first(:y), last(:y), last(:y)])
+#     end
+#     v = [[row.x, row.y] for row in eachrow(transect_ends)]
+#     surveyhull = concave_hull(v, k)
 
-    xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
-    ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
+#     xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
+#     ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
+#     surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
+#         if in_hull([x, y], surveyhull)])
+#     return surveydomain, surveyhull
+# end
+
+function transect_ribbon(transect, transect_width, dx, buffer=0.1, order=:y)
+
+    tr1 = @chain transect begin
+        DataFramesMeta.@transform(:log = round.(:log ./ dx) .* dx)
+        @by(order, :x = mean(:x), :y = mean(:y))
+        @orderby(:y)
+        @select(:x, :y)
+        unique()
+    end
+
+    a = pi/2
+    R1 = [cos(a) -sin(a); sin(a) cos(a)]
+    R2 = [cos(-a) -sin(-a); sin(-a) cos(-a)]
+
+    w = transect_width / 2 * 1.852 * (1 + buffer)
+
+    X = Array(tr1)'
+    v = diff(X, dims=2)
+    v = v ./ norm.(eachcol(v))' .* w
+    v = [v v[:, end]]
+    left = R1 * v .+ X
+    right = R2 * v .+ X
+
+    ribbon_bounds = [tuple(x...) for x in [eachcol(left); eachcol(reverse(right, dims=2))]] 
+    ribbon_bounds = [ribbon_bounds; (left[:, 1]...,)]
+    return PolyArea(ribbon_bounds)
+end
+
+function transects_domain(acoustics, transect_width; dx=10.0, buffer=0.1, order=:y)
+    tr_set = map(unique(acoustics.transect)) do i
+        tr = transect_ribbon(@subset(acoustics, :transect .== i),
+            transect_width, dx, buffer, order)
+    end
+    return GeometrySet(tr_set)
+end
+
+"""
+    get_survey_grid(acoustics[; transect_width=20.0, dx=10.0, dy=dx, buffer=0.2, order=:y])
+
+Construct a regular grid inside the survey area, defined as the set of ribbon-like regions
+with width `transect_width` along each survey transect.
+
+# Arguments
+- `acoustics` : `DataFrame` of georeferenced acoustic data. Should have `:x`, `:y`, and 
+`:log` columns.
+- `transect_width` : Distance between transects, in nautical miles. Default is 20 nmi.
+- `dx`, `dy` : Grid resolution, in km. Default is 10 km.
+- `buffer` : Amount to expand each transect strip side-to-side to ensure they overlap. 
+Default is 0.2 (i.e., 20%).
+- `order` : `Symbol` indicating which column of `acoustics` to use to define the direction
+of each transect for the purposes of defining the ribbon's boundaries. Defaults to `:y`,
+since most of MACE's surveys have north-south transects. For east-west transects, use `:x`,
+and for curving transects use `:log`.
+
+"""
+function get_survey_grid(acoustics; transect_width=20.0, dx=10.0, dy=dx, buffer=0.1, order=:y)
+    tr_set = transects_domain(acoustics, transect_width; dx=dx, buffer=buffer, order=order)
+    box = boundingbox(tr_set)
+    xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
+    ygrid = range(box.min.coords.y.val, box.max.coords.y.val, step=dx)
     surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
-        if in_hull([x, y], surveyhull)])
-    return surveydomain, surveyhull
+        if in(Point(x, y), tr_set)])
+    return surveydomain, tr_set
 end
 
 """
@@ -104,7 +169,7 @@ directory:
 - acoustics_projected.csv : Spatially-projected NASC by interval and scaling class.
 """
 function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx, 
-        missingstring=[".", "NA"])
+        missingstring=[".", "NA"], transect_buffer=0.2, transect_order=:y)
     scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame,
         missingstring=missingstring)
     trawl_locations_mace = CSV.read(joinpath(surveydir, "trawl_locations_mace.csv"), DataFrame,
@@ -129,20 +194,20 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
     scaling.class .= replace.(scaling.class, "_FILTERED" => "")
     acoustics.class .= replace.(acoustics.class, "_FILTERED" => "")
     scaling_classes = unique(scaling.class)
-
     acoustics = @chain acoustics begin
         @select(:transect,
                 :interval, 
                 :class, 
                 :lat = :start_latitude, 
                 :lon = :start_longitude,
+                :log = :start_vessel_log,
                 :nasc)
         @subset(in(scaling_classes).(:class),
                 abs.(:lon) .< 360,
                 abs.(:lat) .< 360)
-        @by([:transect, :interval, :class, :lat, :lon], :nasc = sum(:nasc))
-        unstack([:transect, :interval, :lat, :lon], :class, :nasc, fill=0)
-        stack(Not([:transect, :interval, :lat, :lon]), variable_name=:class, value_name=:nasc)
+        @by([:transect, :interval, :class, :lat, :lon, :log], :nasc = sum(:nasc))
+        unstack([:transect, :interval, :lat, :lon, :log], :class, :nasc, fill=0)
+        stack(Not([:transect, :interval, :lat, :lon, :log]), variable_name=:class, value_name=:nasc)
     end
     acoustics.nasc[ismissing.(acoustics.nasc)] .= 0
 
@@ -152,8 +217,8 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
-    surveydomain, surveyhull = get_survey_grid(acoustics, 20, transect_width=20.0,
-        dx=dx, dy=dy)
+    surveydomain, surveyhull = get_survey_grid(acoustics, transect_width=20.0,
+        dx=dx, dy=dy, buffer=transect_buffer, order=transect_order)
 
     acoustics = @chain acoustics begin
         DataFramesMeta.@transform(
@@ -174,7 +239,7 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
             :x = [u.x / 1e3 for u in :utm], 
             :y = [u.y / 1e3 for u in :utm]
         )
-        @subset([in_hull([x, y], surveyhull) for (x, y) in zip(:x, :y)])
+        @subset([in(Point(x, y), surveyhull) for (x, y) in zip(:x, :y)])
     end
 
     length_weight = CSV.read(joinpath(surveydir, "measurements.csv"), DataFrame,
