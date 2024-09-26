@@ -9,7 +9,7 @@
 using GLM
 using StatsBase
 
-function make_weight_function(length_weight, stochastic=true, nmin=10)
+function make_weight_function(length_weight, stochastic=true, nmin=5)
     n = nrow(length_weight)
     ii = stochastic ? sample(1:n, n) : 1:n
     length_weight_boot = @view length_weight[ii, :]
@@ -20,7 +20,7 @@ function make_weight_function(length_weight, stochastic=true, nmin=10)
     a = exp(μloga)
     b =  μb
     Lmax = round(Int, maximum(length_weight.fork_length))
-    all_lengths = DataFrame(fork_length = 1:Lmax)
+    all_lengths = DataFrame(fork_length = 1:Lmax)   
     binned = @chain length_weight_boot begin
         rightjoin(all_lengths, on=:fork_length)
         @by(:fork_length, 
