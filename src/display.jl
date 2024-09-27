@@ -69,11 +69,13 @@ function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paire
         kwargs...)
     pk_results = @subset(results, :species_code .== 21740)
     xticks = sort(unique(pk_results.age))
+    xticklabels = string.(xticks)
+    xticklabels[end] *= "+"
     p_abundance = @df pk_results violin(:age, :n/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Abundance (billions)", legend=false);
     p_biomass = @df pk_results violin(:age, :biomass/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Biomass (Mt)");
-    plot(p_abundance, p_biomass; xticks=xticks, size=size, margin=margin, kwargs...)
+    plot(p_abundance, p_biomass; xticks=(xticks, xticklabels), size=size, margin=margin, kwargs...)
 end
 
 """
@@ -134,7 +136,11 @@ function plot_error_source_by_age(results_step, results, variable=:n; species_co
     stepwise_summary = summarize_stepwise_bootstrap(results_step, variable; 
         species_codes=species_codes) 
     results_summary = summarize_bootstrap(results, variable; species_codes=species_codes)
+    xticks = sort(unique(stepwise_summary.age))
+    xticklabels = string.(xticks)
+    xticklabels[end] *= "+"
     @df stepwise_summary plot(:age, :std/1e9, group=:added_error, marker=:o, 
+        xticks = (xticks, xticklabels),
         markerstrokewidth=0, xlabel="Age class", ylabel="S.D. (Biomass, MT)", kwargs...)
     @df results_summary plot!(:age, :std/1e9, linewidth=2, marker=:o, label="All", 
         color=:black)    
