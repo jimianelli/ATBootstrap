@@ -1,46 +1,28 @@
-
-#=
-Questions for Kresimir:
-    - Which functions to apply in EBS?
-        - 
-    - Which column in SKSD are these calculating?
-        - sample_correction_scalar (reciprocal of p)
-    - What are confidence intervals for parameters of each?
-    - Citation for these?
-        - 201906 report?
-        - 202107 report...(not out yet)?
-    - How is age calculated?
-    - How is weight calculated?
-    - How to re-run analysis for nearest-haul myself?
-        -
-=#
-
-# (Intercept)      Length 
-#  -4.0207641   0.3533825 
-
-# 2 x 2 Matrix of class "dpoMatrix"
-#             (Intercept)       Length
-# (Intercept)  1.04110776 -0.085418314
-# Length      -0.08541831  0.007097557
-
-
-# > L50_95_range
-#     2.5%    97.5% 
-# 10.35141 11.98987 
-# > SR_95_range
-#      2.5%     97.5% 
-#  4.207268 11.592823 
-
 # glmm_fit_sel=exp(betas[1]+length_bins*betas[2])/(1+exp(betas[1]+length_bins*betas[2]))
 
-
 function make_selectivity_function(stochastic=true)
-    μ = [-4.0207641, 0.3533825]
-    Σ = [1.04110776 -0.0854183;
-         -0.0854183  0.007097557]
-    D = MvNormal(μ, Σ)
-    β = stochastic ? rand(D) : μ
-    selectivity(L) = exp(β[1]+L*β[2])/(1+exp(β[1]+L*β[2]))
+    # LFS curve
+    μ_lfs = [-2.4664253, 0.2698528]
+    Σ_lfs = [0.41987457 -0.0233237;
+            -0.0233237  0.001459591]
+    D_lfs = MvNormal(μ_lfs, Σ_lfs)
+    β_lfs = stochastic ? rand(D_lfs) : μ_lfs
+
+    # AWT curve
+    μ_awt = [-1.0558410, 0.1741619]
+    Σ_awt = [0.49771768 -0.01810365
+            -0.01810365  0.0008656043]
+    D_awt = MvNormal(μ_awt, Σ_awt)
+    β_awt = stochastic ? rand(D_awt) : μ_awt
+
+    function selectivity(L, survey)
+        if survey < 202001
+            return exp(β_awt[1]+L*β_awt[2])/(1+exp(β_awt[1]+L*β_awt[2]))
+        else
+            return exp(β_lfs[1]+L*β_lfs[2])/(1+exp(β_lfs[1]+L*β_lfs[2]))
+        end
+    end
+
     return selectivity
 end
 
@@ -48,7 +30,8 @@ function apply_selectivity!(scaling, selectivity_function)
     for (i, r) in enumerate(eachrow(scaling))
         L = r.primary_length
         if r.species_code == 21740 && r.class != "BT"
-            scaling.sample_correction_scalar[i] = 1 / selectivity_function(L)
+            s = selectivity_function(L, r.survey)
+            scaling.sample_correction_scalar[i] = 1 / s
             scaling.w[i] = r.catch_sampling_expansion * r.user_defined_expansion *
                 r.sample_correction_scalar * r.haul_weight
         end
