@@ -84,7 +84,7 @@ requirements of the conditional simulation.
     Ensures that each z-distribution has a nonzero mean/variance. 
 """
 function parameterize_zdists(Dist, lungs_params, ϵ=cbrt(eps()))
-    data, μx, L, μ, dlocs, slocs = lungs_params
+    (; data, μx, L, μ, dlocs, slocs) = lungs_params
     μx = copy(μx)
     μx[μx .< ϵ] .= ϵ 
     μx = μx .* mean(data) ./ mean(μx)
@@ -96,11 +96,11 @@ end
 
 
 function nonneg_lumult(params, z)
-    data, μx, L, μ, data_locs, sim_locs = params
-    npts = length(data_locs) + length(sim_locs)
+    (; data, μx, L, μ, dlocs, slocs) = params
+    npts = length(dlocs) + length(slocs)
     x = zeros(npts)
-    x[sim_locs] = L * z
-    x[data_locs] = data
+    x[slocs] = L * z
+    x[dlocs] = data
     return x
 end
 

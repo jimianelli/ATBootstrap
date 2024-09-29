@@ -62,6 +62,52 @@ function plot_simulated_nasc(atbp::ATBootstrapProblem, surveydata::ATSurveyData,
 end
 
 """
+    plot_geosim_stats(abtp::ATBootstrapProbelm, surveydata::ATSurveyData[, n=200])
+
+Create diagnostic plots for the conditional geostatistical simulations of each scattering 
+class specified by `atbp` and `surveydata`. This will generate `n` realizations of the 
+simulated fields and for each class, and will plot:
+1. A histogram of the observed NASC overlaid with a spaghetti plot of kernel densities for 
+the simulated fields,
+2. A histogram of the *means* of the `n` simulated fields along with the observed mean, and
+3. A histogram of the standard deviations of the `n` simulated fields along with the
+observed standard deviation.
+"""
+function plot_geosim_stats(atbp, surveydata, n=200)
+    hist_plots = []
+    mean_plots = []
+    sd_plots = []
+
+    for prob in atbp.class_problems
+        obs_nasc = @subset(surveydata.acoustics, prob.class .== :class).nasc
+        sim_nascs = [simulate_nasc(prob) for _ in 1:n]
+
+        ph = histogram(obs_nasc, normalize=true, linewidth=0,
+            xlabel="NASC (m² nmi²)", ylabel="Probability density", 
+            label="Observed", title=prob.class)
+        density!(ph, sim_nascs[1], trim=true, alpha=0.2, linecolor="black", label="Simulated")
+        for nasc in sim_nascs[2:end]
+            density!(ph, nasc, trim=true, alpha=0.2, linecolor="black", label="")
+        end
+        xlims!(ph, 0, quantile(obs_nasc, 0.999))
+        push!(hist_plots, ph)
+
+        pm = histogram(mean.(sim_nascs), normalize=true, linewidth=0, label="Simulated mean",
+            xlabel="Mean NASC (m² nmi²)", ylabel="Probability density")
+        vline!([mean(obs_nasc)], linewidth=2, label="Observed mean")
+        push!(mean_plots, pm)
+
+        ps = histogram(std.(sim_nascs), normalize=true, linewidth=0, label="Simulated S.D.",
+            xlabel="Std. dev. NASC (m² nmi²)", ylabel="Probability density")
+        vline!([std(obs_nasc)], linewidth=2, label="Observed S.D.")
+        push!(sd_plots, ps)
+    end
+
+    return plot(hist_plots..., mean_plots..., sd_plots...,
+        layout=(3, length(atbp.class_problems)), size=(800, 800))
+end
+
+"""
 Make violin plots of pollock abundance- and biomass-at-age from the data frame `results`,
 the output of running `simulate`. Plotting options can be passed in as keyword arguments.
 """

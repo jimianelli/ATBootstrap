@@ -40,9 +40,7 @@ dom = ATB.solution_domain(cp1)
 scatter(dom.x, dom.y, zcolor=nasc, markerstrokewidth=0, legend=false, title="2016")
 scatter!(acoustics.x, acoustics.y, color=:white, markerstrokewidth=0, markersize=2)
 
-dom, hull = ATB.get_survey_grid(acoustics, 5)
-plot!(hull)
-
+ATB.plot_geosim_stats(atbp, surveydata)
 # Do the bootstrap uncertainty analysis
 results = ATB.simulate(atbp, surveydata, nreplicates = 500)
 ATB.plot_boot_results(results)
