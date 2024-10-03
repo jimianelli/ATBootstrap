@@ -1,29 +1,31 @@
 include("nearbottom.jl")
 
-# function get_survey_grid(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
-#     w = transect_width / 2 * 1.852
-#     transect_ends = @chain acoustics begin
-#         @orderby(:y)
-#         @by(:transect, 
-#             :x = [first(:x) + w, first(:x) - w, last(:x) + w, last(:x) - w], 
-#             :y = [first(:y), first(:y), last(:y), last(:y)])
-#     end
-#     v = [[row.x, row.y] for row in eachrow(transect_ends)]
-#     surveyhull = concave_hull(v, k)
-
-#     xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
-#     ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
-#     surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
-#         if in_hull([x, y], surveyhull)])
-#     return surveydomain, surveyhull
-# end
-
-function transect_ribbon(transect, transect_width, dx, buffer=0.1, order=:y)
-
-    tr1 = @chain transect begin
-        DataFramesMeta.@transform(:log = round.(:log ./ dx) .* dx)
-        @by(order, :x = mean(:x), :y = mean(:y))
+function get_survey_grid_hull(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
+    w = transect_width / 2 * 1.852
+    transect_ends = @chain acoustics begin
         @orderby(:y)
+        @by(:transect, 
+            :x = [first(:x) + w, first(:x) - w, last(:x) + w, last(:x) - w], 
+            :y = [first(:y), first(:y), last(:y), last(:y)])
+    end
+    v = [[row.x, row.y] for row in eachrow(transect_ends)]
+    surveyhull = concave_hull(v, k)
+
+    xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
+    ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
+    surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
+        if in_hull([x, y], surveyhull)])
+    return surveydomain, surveyhull
+end
+
+function transect_ribbon(transect, transect_width, dx, buffer=0.1, ord=:y)
+    tr1 = @chain transect begin
+        @select(:x, :y, :log)
+        stack(Not(ord))
+        DataFramesMeta.@transform($ord = round.($ord ./ dx) .* dx)
+        @by([ord, :variable], :value = mean(:value))
+        unstack()
+        @orderby($ord)
         @select(:x, :y)
         unique()
     end
@@ -169,7 +171,7 @@ directory:
 - acoustics_projected.csv : Spatially-projected NASC by interval and scaling class.
 """
 function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx, 
-        missingstring=[".", "NA"], transect_buffer=0.2, transect_order=:y)
+        missingstring=[".", "NA"], transect_width=20, transect_buffer=0.2, transect_order=:y)
     scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame,
         missingstring=missingstring)
     trawl_locations_mace = CSV.read(joinpath(surveydir, "trawl_locations_mace.csv"), DataFrame,
@@ -217,17 +219,22 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
-    surveydomain, surveyhull = get_survey_grid(acoustics, transect_width=20.0,
+    surveydomain, surveyhull = get_survey_grid(acoustics, transect_width=transect_width,
         dx=dx, dy=dy, buffer=transect_buffer, order=transect_order)
 
+    xmin = minimum(acoustics.x)
+    ymin = minimum(acoustics.y)
     acoustics = @chain acoustics begin
+        # DataFramesMeta.@transform(:x = :x .- xmin, :y = :y .- ymin)
         DataFramesMeta.@transform(
             :x = round.(:x ./ dx) .* dx, 
             :y = round.(:y ./ dy) .* dy
         ) 
+        # DataFramesMeta.@transform(:x = :x .+ xmin, :y = :y .+ ymin)
         @by([:transect, :class, :x, :y], 
             :lon = mean(:lon), 
             :lat = mean(:lat), 
+            :log = mean(:log),
             :nasc = mean(:nasc)
         )
     end
