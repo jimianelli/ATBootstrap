@@ -73,7 +73,7 @@ the simulated fields,
 3. A histogram of the standard deviations of the `n` simulated fields along with the
 observed standard deviation.
 """
-function plot_geosim_stats(atbp, surveydata, n=200)
+function plot_geosim_stats(atbp, surveydata, n=500)
     hist_plots = []
     mean_plots = []
     sd_plots = []
@@ -94,17 +94,17 @@ function plot_geosim_stats(atbp, surveydata, n=200)
 
         pm = histogram(mean.(sim_nascs), normalize=true, linewidth=0, label="Simulated mean",
             xlabel="Mean NASC (m² nmi²)", ylabel="Probability density")
-        vline!([mean(obs_nasc)], linewidth=2, label="Observed mean")
+        vline!([mean(obs_nasc)], linewidth=3, label="Observed mean")
         push!(mean_plots, pm)
 
         ps = histogram(std.(sim_nascs), normalize=true, linewidth=0, label="Simulated S.D.",
             xlabel="Std. dev. NASC (m² nmi²)", ylabel="Probability density")
-        vline!([std(obs_nasc)], linewidth=2, label="Observed S.D.")
+        vline!([std(obs_nasc)], linewidth=3, label="Observed S.D.")
         push!(sd_plots, ps)
     end
-
+    nclasses = length(atbp.class_problems)
     return plot(hist_plots..., mean_plots..., sd_plots...,
-        layout=(3, length(atbp.class_problems)), size=(800, 800))
+        layout=(3, length(atbp.class_problems)), size=(400*nclasses, 600))
 end
 
 """
@@ -120,7 +120,7 @@ function plot_boot_results(results; size=(900, 400), margin=15px, palette=:Paire
     p_abundance = @df pk_results violin(:age, :n/1e9, group=:age, palette=palette,
         xlabel="Age class", ylabel="Abundance (billions)", legend=false);
     p_biomass = @df pk_results violin(:age, :biomass/1e9, group=:age, palette=palette,
-        xlabel="Age class", ylabel="Biomass (Mt)");
+        xlabel="Age class", ylabel="Biomass (Mt)", legend=false);
     plot(p_abundance, p_biomass; xticks=(xticks, xticklabels), size=size, margin=margin, kwargs...)
 end
 
