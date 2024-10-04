@@ -1,16 +1,18 @@
 using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
+using Random
 using StatsPlots, StatsPlots.PlotMeasures
 
 include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 import .ATBootstrap as ATB
 
 survey = "201807"
+Random.seed!(parse(Int, survey))
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true)
+ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=20, transect_buffer=1)
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
 
@@ -44,22 +46,29 @@ Plotting example conditional simulations
 =#
 using GeoStats
 cp1 = first(atbp.class_problems)
-sim_domain = domain(cp1.geoproblem)
-sim_coords = coordinates.(sim_domain)
+sim_domain = ATB.solution_domain(cp1)
+
+scatter(sim_domain.x, sim_domain.y, markersize=2)
+scatter!(acoustics.x, acoustics.y, markersize=2)
 
 nasc_plots = map(1:6) do _ 
     nasc = ATB.simulate_nasc(cp1)
-    scatter(first.(sim_coords), last.(sim_coords), zcolor=nasc, markershape=:square,
+    scatter(sim_domain.x, sim_domain.y, zcolor=nasc, markershape=:square,
         markerstrokewidth=0, markersize=1.7, legend=false, aspect_ratio=:equal,
         clim=(0, 3000), xlabel="Easting (km)", ylabel="Northing (km)")
 end
 plot(nasc_plots..., layout=(2, 3), size=(1200, 800), margin=15px)
 savefig(joinpath(@__DIR__, "plots", "conditional_nasc.png"))
+
+ATB.plot_geosim_stats(atbp, surveydata, 500)
+savefig(joinpath(@__DIR__, "plots", "conditional_nasc_stats.png"))
+
 #=
 Plotting example trawl assignments
 =#
 tl1 = georef(@subset(trawl_locations, :event_id .> 1), (:x, :y))
-trawl_coords = coordinates.(domain(tl1))
+sim_coords = ATB.svector_coords.(cp1.geosetup.domain)
+trawl_coords = ATB.svector_coords.(domain(tl1))
 trawl_assignments_det = ATB.trawl_assignments(sim_coords, trawl_coords, false)
 trawl_assignments_rand= ATB.trawl_assignments(sim_coords, trawl_coords, true)
 
