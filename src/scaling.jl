@@ -72,20 +72,22 @@ function pollock_weights_at_age(scaling, length_weight, all_ages, stochastic=fal
     return res
 end
 
+function _category(use_ages, species_code, age)
+    if use_ages(species_code)
+        return string.(species_code) .* "@" .* string.(age)
+    else
+        return string.(species_code) .* "@-1"
+    end
+end
+
 function proportion_at_category(scaling, all_categories, aged_species=[21740])
     use_ages = in(aged_species)
     scaling.category .= ""
-    for (i, r) in enumerate(eachrow(scaling))
-        if use_ages(r.species_code)
-            scaling.category[i] = string(r.species_code) * "@" * string(r.age)
-        else
-            scaling.category[i] = string(r.species_code) * "@-1"
-        end
-    end
     comp = @chain scaling begin
+        DataFramesMeta.@transform(:category = _category.(use_ages, :species_code, :age))
         @by([:event_id, :category], :p_cat=sum(:w))
         DataFrames.groupby(:event_id)
-        DataFramesMeta.@transform(:p_cat = :p_cat / sum(:p_cat))
+        DataFramesMeta.@transform(:p_cat = :p_cat ./ sum(:p_cat))
         rightjoin(all_categories, on=[:event_id, :category])
         DataFramesMeta.@transform(:p_cat = replace(:p_cat, missing => 0.0))
         select(:event_id, :category, :p_cat)

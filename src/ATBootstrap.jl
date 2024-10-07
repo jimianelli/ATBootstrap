@@ -58,6 +58,75 @@ include("display.jl")
 """
 svector_coords(pt::Point) = SVector(pt.coords.x.val, pt.coords.y.val)
 
+function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurveyData,
+        bs=BootSpecs(), i=1, scaling_sub = @subset(surveydata.scaling, :class .== scp.class),
+        surveydomain_coords = svector_coords.(surveydata.domain),
+        z0 = mean.(scp.zdists))
+
+    selectivity_function = make_selectivity_function(bs.selectivity)
+    scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
+    apply_selectivity!(scaling_boot, selectivity_function)
+
+    predict_ts = make_ts_function(bs.predict_ts)
+    predict_age = make_age_length_function(surveydata.age_length, scp.age_max,
+        bs.age_length)
+    scaling_boot = DataFramesMeta.@transform!(scaling_boot,
+        :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length) ./ 10),
+        :age = predict_age.(:primary_length))
+    
+    trawl_means = get_trawl_means(scaling_boot, surveydata.trawl_locations)
+    if bs.drop_trawl
+        popat!(trawl_means, rand(1:nrow(trawl_means)))
+    end
+    geotrawl_means = @chain trawl_means begin
+        @select(:x, :y, :ts, :length) 
+        georef((:x, :y))
+    end
+    all_ages = make_all_ages(scaling_boot, scp.age_max)
+    all_categories = make_all_categories(scaling_boot, scp.age_max)
+    category_comp = proportion_at_category(scaling_boot, all_categories)
+    age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
+        all_ages, bs.weights_at_age)
+    
+    ii = trawl_assignments(surveydomain_coords, 
+                svector_coords.(domain(geotrawl_means)), bs.trawl_assignments)
+
+    nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
+    cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
+
+    df = DataFrame(
+        nasc = nasc * cal_error_sim,
+        class = scp.class,
+        event_id = trawl_means.event_id[ii]
+    )
+    # remove nearbottom intercept from nasc (from Nate's paper)
+    df.nasc[df.class .== "BT"] .-= nearbottom_intercept
+    df.nasc .= max.(df.nasc, 0) # make sure we don't end up with negative backscatter
+
+    df = @chain df begin
+        leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
+        leftjoin(category_comp, on=:event_id)
+        DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]),
+            variable_name=:category, value_name=:p_cat)
+        DataFramesMeta.@transform(:n = :nasc ./ (4π .* :sigma_bs) .* :p_cat)
+        @by(:category,
+            :n = sum(skipmissing(:n)) * surveydata.dA)
+        DataFramesMeta.@transform(
+            :species_code = parse.(Int, first.(split.(:category, "@"))),
+            :age = parse.(Int, last.(split.(:category, "@")))
+        )
+        leftjoin(age_weights, on=[:species_code, :age])
+        DataFramesMeta.@transform(
+            :biomass = :n .* :weight, 
+            :i = i
+        )
+        @select(:i, :species_code, :age, :category, :n, :biomass)
+        @orderby(:i, :species_code, :age, :n, :biomass)
+    end
+    return df
+end
+
+
 """
     simulate_class(scp, surveydata; nreplicates=500, bs=BootSpecs())
 
@@ -70,73 +139,12 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         bs=BootSpecs())
 
     scaling_sub = @subset(surveydata.scaling, :class .== scp.class)
-
+    surveydomain_coords = svector_coords.(surveydata.domain)
     z0 = mean.(scp.zdists)
 
     println("Bootstrapping $(scp.class)...")
     results = @showprogress map(1:nreplicates) do i
-
-        selectivity_function = make_selectivity_function(bs.selectivity)
-        scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
-        apply_selectivity!(scaling_boot, selectivity_function)
-
-        predict_ts = make_ts_function(bs.predict_ts)
-        predict_age = make_age_length_function(surveydata.age_length, scp.age_max,
-            bs.age_length)
-        scaling_boot = DataFramesMeta.@transform(scaling_boot,
-            :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length)/10),
-            :age = predict_age.(:primary_length))
-        
-        trawl_means = get_trawl_means(scaling_boot, surveydata.trawl_locations)
-        if bs.drop_trawl
-            popat!(trawl_means, rand(1:nrow(trawl_means)))
-        end
-        geotrawl_means = @chain trawl_means begin
-            @select(:x, :y, :ts, :length) 
-            georef((:x, :y))
-        end
-        all_ages = make_all_ages(scaling_boot, scp.age_max)
-        all_categories = make_all_categories(scaling_boot, scp.age_max)
-        category_comp = proportion_at_category(scaling_boot, all_categories)
-        age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
-            all_ages, bs.weights_at_age)
-        
-        ii = trawl_assignments(svector_coords.(surveydata.domain), 
-                    svector_coords.(domain(geotrawl_means)), bs.trawl_assignments)
-
-        nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
-        cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
-
-        df = DataFrame(
-            nasc = nasc * cal_error_sim,
-            class = scp.class,
-            event_id = trawl_means.event_id[ii]
-        )
-        # remove nearbottom intercept from nasc (from Nate's paper)
-        df.nasc[df.class .== "BT"] .-= nearbottom_intercept
-        df.nasc .= max.(df.nasc, 0) # make sure we don't end up with negative backscatter
-
-        df = @chain df begin
-            leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
-            leftjoin(category_comp, on=:event_id)
-            DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]),
-                variable_name=:category, value_name=:p_cat)
-            DataFramesMeta.@transform(:n = :nasc ./ (4π * :sigma_bs) .* :p_cat)
-            @by(:category,
-                :n = sum(skipmissing(:n)) * surveydata.dA)
-            DataFramesMeta.@transform(
-                :species_code = parse.(Int, first.(split.(:category, "@"))),
-                :age = parse.(Int, last.(split.(:category, "@")))
-            )
-            leftjoin(age_weights, on=[:species_code, :age])
-            DataFramesMeta.@transform(
-                :biomass = :n .* :weight, 
-                :i = i
-            )
-            @select(:i, :species_code, :age, :category, :n, :biomass)
-            @orderby(:i, :species_code, :age, :n, :biomass)
-        end
-        return df
+        simulate_class_iteration(scp, surveydata, bs, i, scaling_sub, surveydomain_coords, z0)
     end
 
     return vcat(results...)

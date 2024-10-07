@@ -27,13 +27,24 @@ function make_selectivity_function(stochastic=true)
 end
 
 function apply_selectivity!(scaling, selectivity_function)
-    for (i, r) in enumerate(eachrow(scaling))
-        L = r.primary_length
-        if r.species_code == 21740 && r.class != "BT"
-            s = selectivity_function(L, r.survey)
-            scaling.sample_correction_scalar[i] = 1 / s
-            scaling.w[i] = r.catch_sampling_expansion * r.user_defined_expansion *
-                r.sample_correction_scalar * r.haul_weight
+    # w = Array{eltype(scaling.w)}(undef, nrow(scaling))
+    # for (i, r) in enumerate(eachrow(scaling))
+    #     L = r.primary_length
+    #     if r.species_code == 21740 && r.class != "BT"
+    #         s = selectivity_function(L, r.survey)
+    #         scaling.sample_correction_scalar[i] = 1 / s
+    #         w[i] = r.catch_sampling_expansion * r.user_defined_expansion *
+    #             r.sample_correction_scalar * r.haul_weight
+    #     end
+    # end
+    # scaling[:, :w] .= w
+
+    @eachrow! scaling begin
+        L = :primary_length
+        if :species_code == 21740 && :class != "BT"
+            s = selectivity_function(L, :survey)
+            :sample_correction_scalar = 1 / s
+            :w = :catch_sampling_expansion * :user_defined_expansion * :sample_correction_scalar * :haul_weight
         end
     end
 end
