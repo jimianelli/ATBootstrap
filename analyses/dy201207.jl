@@ -1,11 +1,13 @@
 using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
+using Random
 using StatsPlots, StatsPlots.PlotMeasures
 
 include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 import .ATBootstrap as ATB
 
 survey = "201207"
+Random.seed!(parse(Int, survey))
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
@@ -41,7 +43,7 @@ scatter(dom.x, dom.y, zcolor=nasc, markerstrokewidth=0, legend=false, title="201
 scatter!(acoustics.x, acoustics.y, color=:white, markerstrokewidth=0, markersize=2)
 
 # Do the bootstrap uncertainty analysis
-hresults = ATB.simulate(atbp, surveydata, nreplicates = 500)
+results = ATB.simulate(atbp, surveydata, nreplicates = 500)
 ATB.plot_boot_results(results)
 CSV.write(joinpath(@__DIR__, "results", "results_$(survey).csv"), results)
 

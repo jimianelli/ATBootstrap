@@ -1,11 +1,13 @@
 using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
+using Random
 using StatsPlots, StatsPlots.PlotMeasures
 
 include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 import .ATBootstrap as ATB
 
 survey = "200707"
+Random.seed!(parse(Int, survey))
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km

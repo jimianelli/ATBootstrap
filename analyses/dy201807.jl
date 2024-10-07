@@ -61,7 +61,7 @@ plot(nasc_plots..., layout=(2, 3), size=(1200, 800), margin=15px)
 savefig(joinpath(@__DIR__, "plots", "conditional_nasc.png"))
 
 ATB.plot_geosim_stats(atbp, surveydata, 500)
-savefig(joinpath(@__DIR__, "plots", "conditional_nasc_stats.png"))
+savefig(joinpath(@__DIR__, "plots", "conditional_nasc_stats_$(survey).png"))
 
 #=
 Plotting example trawl assignments
