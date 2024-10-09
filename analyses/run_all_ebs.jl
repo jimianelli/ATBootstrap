@@ -1,6 +1,3 @@
-using Random
-
-Random.seed!(200707)
 
 ebs_surveys = [
     "200707",
