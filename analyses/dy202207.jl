@@ -12,13 +12,13 @@ surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true)
+ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=40)
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
 
 unique(scaling.class)
 # Other classes appear to be extra transects...?
-scaling_classes = ["SS1", "SS1_FILTERED", "BT"]
+scaling_classes = ["SS1", "BT"]
 acoustics = @subset(acoustics,
     in(scaling_classes).(:class),
     in(scaling_classes).(:class), :transect .< 200)
@@ -36,7 +36,7 @@ atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes)
 ATB.plot_class_variograms(atbp, legend=:bottomright)
 
 # Check out a couple of conditional simulations
-ATB.plot_simulated_nasc(atbp, surveydata, size=(1000, 600), markersize=1.3)
+ATB.plot_simulated_nasc(atbp, surveydata, size=(1000, 600), markersize=2.5)
 
 # Do the bootstrap uncertainty analysis
 results = ATB.simulate(atbp, surveydata, nreplicates = 500)
