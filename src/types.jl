@@ -112,7 +112,7 @@ function ATBootstrapProblem(surveydata::ATSurveyData, scaling_classes::Vector{<:
         maxlag=200.0, nlags=10, weightfunc=h -> 1/h)
     
     class_problems = map(scaling_classes) do class
-        println(class)
+        println("Preparing $(class)...")
         return ScalingClassProblem(surveydata, class, maxlag=maxlag, nlags=nlags,
             age_max=age_max, cal_error=cal_error, weightfunc=weightfunc, 
             zdist_candidates=zdist_candidates)
