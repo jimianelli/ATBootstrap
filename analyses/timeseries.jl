@@ -74,7 +74,7 @@ p_n = @df @subset(totals, :variable .== "n") violin(:year, :value,
 
 p_n = @df @subset(annual, :variable .== "n") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), 
-    series_annotation=text.(:cvstring, :left, :bottom, 9),
+    series_annotation=text.(first.(split.(:cvstring, "(")), :left, :bottom, 9),
     marker=:o, color=1, label="",
     xticks=2007:2022, xlims=(2006.5, 2024), ylims=(0, 40),
     xlabel="Year", ylabel="Abundance (billions)")
