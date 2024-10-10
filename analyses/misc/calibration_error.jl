@@ -1,6 +1,9 @@
 using UnderwaterAcoustics
 using MonteCarloMeasurements
+using Random
 using StatsPlots
+
+Random.seed!(1)
 
 # Function to convert output of UnderwaterAcoustics.absorption to dB/m
 # See https://github.com/org-arl/UnderwaterAcoustics.jl/issues/54
