@@ -170,6 +170,11 @@ function choose_z_distribution(candidate_dists, nasc, lungs_params; nreplicates=
     return dist_fits.distribution[argmin(dist_fits.mean_kld)]    
 end
 
+function zdists(atbp::ATBootstrapProblem)
+    nts = [(class = cp.class, zdist = cp.zfamily) for cp in atbp.class_problems]
+    return DataFrame(nts)
+end
+
 """
     trawl_assignments(pixel_coords, trawl_coords[, stochastic=true[; nneighbors=4, a=1.9]])
 

@@ -30,6 +30,11 @@ surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, tra
 
 atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes)
 
+sim_dists = ATB.zdists(atbp)
+sim_dists.survey .= survey
+CSV.write(joinpath(@__DIR__, "results", "zdists_$(survey).csv"),
+    select(sim_dists, [:survey, :class, :zdist]))
+    
 # Inspect the variograms to make sure they look ok
 ATB.plot_class_variograms(atbp, legend=:bottomright)
 

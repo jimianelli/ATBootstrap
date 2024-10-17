@@ -41,6 +41,11 @@ surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, tra
 
 atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes)
 
+sim_dists = ATB.zdists(atbp)
+sim_dists.survey .= survey
+CSV.write(joinpath(@__DIR__, "results", "zdists_$(survey).csv"),
+    select(sim_dists, [:survey, :class, :zdist]))
+    
 #=
 Plotting example conditional simulations
 =#
