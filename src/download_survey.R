@@ -248,7 +248,7 @@ download_survey <- function(connection, survey, data_set_id, analysis_id, ebs=TR
   acoustics <- download_acoustics(afsc, survey)
 
   surveydir = paste0("surveydata/", survey)
-  dir.create(surveydir, showWarnings = FALSE)
+  dir.create(surveydir, showWarnings = FALSE, recursive = TRUE)
   write.csv(trawl_locations, paste0(surveydir, "/trawl_locations_mace.csv"))
   write.csv(scaling, paste0(surveydir, "/scaling_mace.csv"))
   write.csv(length_weight, paste0(surveydir, "/measurements.csv"))
@@ -281,20 +281,18 @@ species = dbGetQuery(afsc,
 species = cleanup(species)
 write.csv(species, "surveydata/species.csv")
 
-survey.specs <-data.frame(
-  survey = c(200707, 200809, 200909, 201006, 201207, 201407, 201608, 201807, 202207),
-  data_set_id = c(1,      1,      1,      1,      1,      1,      2,      1,      1),
-  analysis_id = c(3,      4,      4,      3,      5,      4,      1,      7,      1)
-)
+# survey.specs <-data.frame(
+#   survey = c(200707, 200809, 200909, 201006, 201207, 201407, 201608, 201807, 202207),
+#   data_set_id = c(1,      1,      1,      1,      1,      1,      2,      1,      1),
+#   analysis_id = c(3,      4,      4,      3,      5,      4,      1,      7,      1)
+# )
 
-for (i in 1:nrow(survey.specs)) {
-  download_survey(afsc, 
-    survey.specs[i, "survey"], 
-    survey.specs[i, "data_set_id"], 
-    survey.specs[i, "analysis_id"])
-}
+# for (i in 1:nrow(survey.specs)) {
+#   download_survey(afsc, 
+#     survey.specs[i, "survey"], 
+#     survey.specs[i, "data_set_id"], 
+#     survey.specs[i, "analysis_id"])
+# }
 
 # Uncomment the line below and fill in the parameters to download a survey one-off
-# download_survey(afsc, survey=202104, data_set_id=3, analysis_id=1)
-
-# download_survey(afsc, 202207, 1, 1)
+download_survey(afsc, survey=202104, data_set_id=3, analysis_id=1)
