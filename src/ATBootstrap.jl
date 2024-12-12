@@ -17,6 +17,7 @@ using ColorSchemes
 export preprocess_survey_data,
     get_survey_grid,
     read_survey_files,
+    in_intervals,
     ATSurveyData,
     ScalingClassProblem,
     ATBootstrapProblem,
@@ -250,6 +251,19 @@ function read_survey_files(surveydir)
     return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
     # return ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
     #     surveydomain)
+end
+
+function in_intervals(x::Real, intervals)
+    for int in intervals
+        if int[1] <= x <= int[2]
+            return true
+        end
+    end
+    return false
+end
+
+function in_intervals(x::AbstractVector, intervals)
+    return [in_intervals(xi, intervals) for xi in x]
 end
 
 

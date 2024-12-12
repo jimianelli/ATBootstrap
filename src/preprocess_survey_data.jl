@@ -18,7 +18,7 @@ function get_survey_grid_hull(acoustics, k=20, ; transect_width=20.0, dx=10.0, d
     return surveydomain, surveyhull
 end
 
-function transect_ribbon(transect, transect_width, dx, buffer=0.1, ord=:y)
+function transect_ribbon(transect, transect_width, dx, buffer=0.05, ord=:y)
     tr1 = @chain transect begin
         @select(:x, :y, :log)
         stack(Not(ord))
@@ -133,13 +133,19 @@ function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
 end
 
 """
-    preprocess_survey_data(surveydir[, dx=0.0, dy=dx])
+preprocess_survey_data(surveydir[; ebs=true, log_ranges=nothing, dx=10.0, dy=dx, 
+        missingstring=[".", "NA"], transect_width=20, transect_buffer=0.2, 
+        transect_order=:y])
 
 Preprocess the survey data files in directory `surveydir` and save the outputs in 
-the same directory as .csv files in standard format. The optional arguments `dx` and `dy`
-set the resolution of the sampling grid; they default to 10.0 (km).
+the same directory as .csv files in standard format. 
 
-This function expects to find the following files, all of which come from running
+# Arguments
+
+## Required arguments
+
+- `surveydir` : Path to the directory where the survey data files are located. This
+function expects to find the following files, all of which come from running
 "download_survey.R":
 
 - scaling_mace.csv : Specimen data from scaling_key_source_data
@@ -147,12 +153,28 @@ This function expects to find the following files, all of which come from runnin
 - trawl_locations_mace.csv : Lat/Lon locations of all MACE trawl events
 - measurements.csv : Length-weight measurements
 
-Additionally, if the option `ebs=true`, this function will expect the following two files
-to be present containing data from the Groundfish Assessment Program survey, which are 
-used to scale acoustic data in the bottom 3 m of the water column:
+## Optional arguments
 
+- `ebs` : Boolean flag indicating whether the survey took place in the Eastern Bering Sea.
+If `ebs=true`, this function will expect the following two files to be present,
+containing data from the Groundfish Assessment Program survey, which are used to scale
+acoustic data in the bottom 3 m of the water column:
 - trawl_locations_gap.csv : Lat/Lon locations of all bottom trawls
 - scaling_gap.csv : Specimen data from racebase.specimen
+
+- `dx` : Set the resolution of the sampling grid; defaults to 10.0 (km).
+- `dy` : Set if the N-S resolution is different from the E-W resolution, otherwise will be
+equal to `dx`.
+- `missingstring` : What string(s) in the CSV files should be interpreted as missing data?
+Defaults to `[".", "NA"]. (If the files have been downloaded correctly, you should not
+need to use this.)
+- `transect_width` : The nominal spacing between transects, in nautical miles.
+- `transect_buffer` : Amount to expand each transect strip side-to-side to ensure they overlap. 
+Default is 0.2 (i.e., 20%).
+- `transect_order` : `Symbol` indicating which column of `acoustics` to use to define the direction
+of each transect for the purposes of defining the ribbon's boundaries. Defaults to `:y`,
+since most of MACE's surveys have north-south transects. For east-west transects, use `:x`,
+and for curving transects use `:log`.
 
 The preprocessing includes the following tasks:
 
@@ -170,7 +192,7 @@ directory:
 - scaling.csv : Formatted scaling key data (containing bottom trawls if they were included)
 - acoustics_projected.csv : Spatially-projected NASC by interval and scaling class.
 """
-function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx, 
+function preprocess_survey_data(surveydir; ebs=true, log_ranges=nothing, dx=10.0, dy=dx, 
         missingstring=[".", "NA"], transect_width=20, transect_buffer=0.2, transect_order=:y)
     scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame,
         missingstring=missingstring)
@@ -196,6 +218,11 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
     scaling.class .= replace.(scaling.class, "_FILTERED" => "")
     acoustics.class .= replace.(acoustics.class, "_FILTERED" => "")
     scaling_classes = unique(scaling.class)
+
+    if isnothing(log_ranges)
+        log_ranges = [tuple(extrema(acoustics.start_vessel_log)...)]
+    end
+
     acoustics = @chain acoustics begin
         @select(:transect,
                 :interval, 
@@ -204,9 +231,12 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
                 :lon = :start_longitude,
                 :log = :start_vessel_log,
                 :nasc)
-        @subset(in(scaling_classes).(:class),
-                abs.(:lon) .< 360,
-                abs.(:lat) .< 360)
+        @subset(
+            in(scaling_classes).(:class),
+            in_intervals(:log, log_ranges),
+            abs.(:lon) .< 360,
+            abs.(:lat) .< 360
+        )
         @by([:transect, :interval, :class, :lat, :lon, :log], :nasc = sum(:nasc))
         unstack([:transect, :interval, :lat, :lon, :log], :class, :nasc, fill=0)
         stack(Not([:transect, :interval, :lat, :lon, :log]), variable_name=:class, value_name=:nasc)
@@ -224,6 +254,7 @@ function preprocess_survey_data(surveydir; ebs=true, dx=10.0, dy=dx,
 
     xmin = minimum(acoustics.x)
     ymin = minimum(acoustics.y)
+
     acoustics = @chain acoustics begin
         # DataFramesMeta.@transform(:x = :x .- xmin, :y = :y .- ymin)
         DataFramesMeta.@transform(

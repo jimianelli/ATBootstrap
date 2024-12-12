@@ -12,19 +12,20 @@ surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=20, transect_buffer=1)
+log_ranges = [(300, 3527.99), (3528, 3864.99), (5145, 7123.99), (7486, 25000)]
 
+ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=20,
+    transect_buffer=0.1, log_ranges=log_ranges)
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
 
 scaling_classes = unique(scaling.class)
 scaling_classes = ["PK1", "BT"]
-
-acoustics = @subset(acoustics, in(scaling_classes).(:class), :transect .< 200)
+acoustics = @subset(acoustics,
+    in(scaling_classes).(:class))
 
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/200, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
-
 
 p_xsects = @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/200,
     alpha=0.5, title="(a)", titlealign=:left)
@@ -96,7 +97,7 @@ savefig(joinpath(@__DIR__, "plots", "trawl_assignments.png"))
 ATB.plot_class_variograms(atbp, legend=:bottomright)
 
 # Check out a couple of conditional simulations
-ATB.plot_simulated_nasc(atbp, surveydata, size=(1000, 600), markersize=1.3)
+ATB.plot_simulated_nasc(atbp, surveydata, size=(1000, 600), markersize=2.5)
 
 # Do the bootstrap uncertainty analysis
 results = ATB.simulate(atbp, surveydata, nreplicates = 500)

@@ -12,16 +12,19 @@ surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=40)
+
+log_ranges = [(250, 2190), (2752.5, 2778), (2400, 2752.49), (2780, 6100)]
+ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=40, 
+    log_ranges=log_ranges)
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
 
 unique(scaling.class)
 # Other classes appear to be extra transects...?
-scaling_classes = ["SS1", "BT"]
+scaling_classes = ["SS1", "SS2", "BT"]
 acoustics = @subset(acoustics,
     in(scaling_classes).(:class),
-    in(scaling_classes).(:class), :transect .< 200)
+    iseven.(:transect))
 
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)

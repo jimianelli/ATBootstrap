@@ -12,14 +12,11 @@ surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true)
+
+log_ranges = [(0, 8607.99), (8709, 9250.49), (9465, 9803.49)]
+ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, log_ranges=log_ranges)
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
-
-scaling_classes = unique(scaling.class)
-acoustics = @subset(acoustics,
-    in(scaling_classes).(:class),
-    in(scaling_classes).(:class), :transect .< 200)
 
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
