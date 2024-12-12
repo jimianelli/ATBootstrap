@@ -1,22 +1,39 @@
 include("nearbottom.jl")
 
-function get_survey_grid_hull(acoustics, k=20, ; transect_width=20.0, dx=10.0, dy=dx)
-    w = transect_width / 2 * 1.852
-    transect_ends = @chain acoustics begin
-        @orderby(:y)
-        @by(:transect, 
-            :x = [first(:x) + w, first(:x) - w, last(:x) + w, last(:x) - w], 
-            :y = [first(:y), first(:y), last(:y), last(:y)])
-    end
-    v = [[row.x, row.y] for row in eachrow(transect_ends)]
-    surveyhull = concave_hull(v, k)
+abstract type AbstractSurveyDomain end
 
-    xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
-    ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
-    surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
-        if in_hull([x, y], surveyhull)])
-    return surveydomain, surveyhull
+"""
+    TransectRibbons([; width=20, buffer=0.1])
+
+Specify how to define a survey domain based on equal-width strips centered on each 
+transect. This method corresponds to MACE's usual calculations based on equally-spaced
+transects.
+
+# Arguments
+
+- `transect_width` : The nominal spacing between transects, in nautical miles.
+- `transect_buffer` : Amount to expand each transect strip side-to-side to ensure they
+overlap.  Default is 0.1 (i.e., 10%).
+"""
+struct TransectRibbons{T} <:AbstractSurveyDomain
+    transect_width::T
+    buffer::T
 end
+TransectRibbons(; width=20, buffer=0.1) = TransectRibbons(promote(width, buffer)...)
+
+"""
+    SurveyHull([k=10])
+
+Specify how to define a survey domain based on a concave hull that wraps around all the 
+acoustic transects. The smoothness of this hull can be adjusted by setting the number of 
+neighbors `k`.
+
+"""
+struct SurveyHull{T<:Integer} <: AbstractSurveyDomain
+    k::T
+end
+SurveyHull(k=10) = SurveyHull(k)
+
 
 function transect_ribbon(transect, transect_width, dx, buffer=0.05, ord=:y)
     tr1 = @chain transect begin
@@ -48,41 +65,6 @@ function transect_ribbon(transect, transect_width, dx, buffer=0.05, ord=:y)
     return PolyArea(ribbon_bounds)
 end
 
-function transects_domain(acoustics, transect_width; dx=10.0, buffer=0.1, order=:y)
-    tr_set = map(unique(acoustics.transect)) do i
-        tr = transect_ribbon(@subset(acoustics, :transect .== i),
-            transect_width, dx, buffer, order)
-    end
-    return GeometrySet(tr_set)
-end
-
-
-abstract type AbstractSurveyDomain end
-
-struct TransectRibbons{T} <:AbstractSurveyDomain
-    transect_width::T
-    buffer::T
-end
-TransectRibbons(; width=20, buffer=0.1) = TransectRibbons(promote(width, buffer)...)
-
-struct SurveyHull{T<:Integer} <: AbstractSurveyDomain
-    k::T
-end
-SurveyHull(k=1) = SurveyHull(k)
-
-function survey_domain(acoustics, method::SurveyHull, order, dx, dy=dx)
-    transect_ends = @chain acoustics begin
-        sort(order)
-        @by(:transect, 
-            :x = [first(:x), last(:x)], 
-            :y = [first(:y), last(:y)]
-        )
-    end
-    v = [[row.x, row.y] for row in eachrow(transect_ends)]
-    hull = concave_hull(v, method.k)
-    return Ngon([Point(x...) for x in hull.vertices]...)
-end
-
 function survey_domain(acoustics, method::TransectRibbons, order, dx, dy=dx)
     tr_set = map(unique(acoustics.transect)) do i
         tr = transect_ribbon(@subset(acoustics, :transect .== i),
@@ -91,8 +73,26 @@ function survey_domain(acoustics, method::TransectRibbons, order, dx, dy=dx)
     return GeometrySet(tr_set)
 end
 
+function survey_domain(acoustics, method::SurveyHull, order, dx, dy=dx)
+    # transect_ends = @chain acoustics begin
+    #     sort(order)
+    #     @by(:log, 
+    #         :x = [first(:x), last(:x)], 
+    #         :y = [first(:y), last(:y)]
+    #     )
+    # end
+    transect_ends = @chain acoustics begin
+        @select(:x, :y)
+        unique()
+    end
+    v = [[row.x, row.y] for row in eachrow(transect_ends)]
+    hull = concave_hull(v, method.k)
+    return Ngon([Point(x...) for x in hull.vertices]...)
+end
+
+
 """
-    get_survey_grid(acoustics[, method=TransectRibbons, [; dx=10.0, dy=dx, order=:y]])
+    get_survey_grid(acoustics[; method=TransectRibbons(), dx=10.0, dy=dx, order=:y]])
 
 Construct a regular grid inside the survey area, defined as the set of ribbon-like regions
 with width `transect_width` along each survey transect.
@@ -100,10 +100,9 @@ with width `transect_width` along each survey transect.
 # Arguments
 - `acoustics` : `DataFrame` of georeferenced acoustic data. Should have `:x`, `:y`, and 
 `:log` columns.
-- `transect_width` : Distance between transects, in nautical miles. Default is 20 nmi.
+- `method` : How to define the survey domain. Options are `TransectRibbons()` (default) or 
+`SurveyHull()`.
 - `dx`, `dy` : Grid resolution, in km. Default is 10 km.
-- `buffer` : Amount to expand each transect strip side-to-side to ensure they overlap. 
-Default is 0.2 (i.e., 20%).
 - `order` : `Symbol` indicating which column of `acoustics` to use to define the direction
 of each transect for the purposes of defining the ribbon's boundaries. Defaults to `:y`,
 since most of MACE's surveys have north-south transects. For east-west transects, use `:x`,
@@ -111,13 +110,6 @@ and for curving transects use `:log`.
 
 """
 function get_survey_grid(acoustics; method=TransectRibbons(), dx=10.0, dy=dx, order=:y)
-    # tr_set = transects_domain(acoustics, transect_width; dx=dx, buffer=buffer, order=order)
-    # box = boundingbox(tr_set)
-    # xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
-    # ygrid = range(box.min.coords.y.val, box.max.coords.y.val, step=dx)
-    # surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
-    #     if in(Point(x, y), tr_set)])
-    # return surveydomain, tr_set
     domain = survey_domain(acoustics, method, order, dx, dy)
     box = boundingbox(domain)
     xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
@@ -176,9 +168,9 @@ function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
 end
 
 """
-preprocess_survey_data(surveydir[; ebs=true, log_ranges=nothing, dx=10.0, dy=dx, 
-        missingstring=[".", "NA"], transect_width=20, transect_buffer=0.2, 
-        transect_order=:y])
+preprocess_survey_data(surveydir[; ebs=true, log_ranges=nothing,
+    grid_method=TransectRibbons(), dx=10.0, dy=dx, transect_order=:y,
+    missingstring=[".", "NA"]])
 
 Preprocess the survey data files in directory `surveydir` and save the outputs in 
 the same directory as .csv files in standard format. 
@@ -204,20 +196,19 @@ containing data from the Groundfish Assessment Program survey, which are used to
 acoustic data in the bottom 3 m of the water column:
 - trawl_locations_gap.csv : Lat/Lon locations of all bottom trawls
 - scaling_gap.csv : Specimen data from racebase.specimen
-
 - `dx` : Set the resolution of the sampling grid; defaults to 10.0 (km).
 - `dy` : Set if the N-S resolution is different from the E-W resolution, otherwise will be
 equal to `dx`.
+- `grid_method` : How to define the survey domain for the purposes of constructing the 
+simulation grid. The options are `TransectRibbons()` (the default) or `SurveyHull()`. See
+their documentation for details and options.
 - `missingstring` : What string(s) in the CSV files should be interpreted as missing data?
 Defaults to `[".", "NA"]. (If the files have been downloaded correctly, you should not
 need to use this.)
-- `transect_width` : The nominal spacing between transects, in nautical miles.
-- `transect_buffer` : Amount to expand each transect strip side-to-side to ensure they overlap. 
-Default is 0.2 (i.e., 20%).
-- `transect_order` : `Symbol` indicating which column of `acoustics` to use to define the direction
-of each transect for the purposes of defining the ribbon's boundaries. Defaults to `:y`,
-since most of MACE's surveys have north-south transects. For east-west transects, use `:x`,
-and for curving transects use `:log`.
+- `transect_order` : `Symbol` indicating which column of `acoustics` to use to define the
+direction of each transect for the purposes of defining the domain. Defaults to `:y`,
+since most of MACE's surveys have primarily north-south transects. For east-west
+transects, use `:x`, and for curving transects use `:log`.
 
 The preprocessing includes the following tasks:
 

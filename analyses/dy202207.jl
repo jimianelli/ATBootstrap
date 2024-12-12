@@ -15,6 +15,7 @@ dA = (resolution * km2nmi)^2
 
 log_ranges = [(250, 2190), (2752.5, 2778), (2400, 2752.49), (2780, 6100)]
 ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true,  log_ranges=log_ranges,
+    # grid_method=ATB.SurveyHull(300))
     grid_method=ATB.TransectRibbons(width=40))
 
 (; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
