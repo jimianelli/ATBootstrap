@@ -56,8 +56,43 @@ function transects_domain(acoustics, transect_width; dx=10.0, buffer=0.1, order=
     return GeometrySet(tr_set)
 end
 
+
+abstract type AbstractSurveyDomain end
+
+struct TransectRibbons{T} <:AbstractSurveyDomain
+    transect_width::T
+    buffer::T
+end
+TransectRibbons(; width=20, buffer=0.1) = TransectRibbons(promote(width, buffer)...)
+
+struct SurveyHull{T<:Integer} <: AbstractSurveyDomain
+    k::T
+end
+SurveyHull(k=1) = SurveyHull(k)
+
+function survey_domain(acoustics, method::SurveyHull, order, dx, dy=dx)
+    transect_ends = @chain acoustics begin
+        sort(order)
+        @by(:transect, 
+            :x = [first(:x), last(:x)], 
+            :y = [first(:y), last(:y)]
+        )
+    end
+    v = [[row.x, row.y] for row in eachrow(transect_ends)]
+    hull = concave_hull(v, method.k)
+    return Ngon([Point(x...) for x in hull.vertices]...)
+end
+
+function survey_domain(acoustics, method::TransectRibbons, order, dx, dy=dx)
+    tr_set = map(unique(acoustics.transect)) do i
+        tr = transect_ribbon(@subset(acoustics, :transect .== i),
+            method.transect_width, dx, method.buffer, order)
+    end
+    return GeometrySet(tr_set)
+end
+
 """
-    get_survey_grid(acoustics[; transect_width=20.0, dx=10.0, dy=dx, buffer=0.2, order=:y])
+    get_survey_grid(acoustics[, method=TransectRibbons, [; dx=10.0, dy=dx, order=:y]])
 
 Construct a regular grid inside the survey area, defined as the set of ribbon-like regions
 with width `transect_width` along each survey transect.
@@ -75,15 +110,23 @@ since most of MACE's surveys have north-south transects. For east-west transects
 and for curving transects use `:log`.
 
 """
-function get_survey_grid(acoustics; transect_width=20.0, dx=10.0, dy=dx, buffer=0.1, order=:y)
-    tr_set = transects_domain(acoustics, transect_width; dx=dx, buffer=buffer, order=order)
-    box = boundingbox(tr_set)
+function get_survey_grid(acoustics; method=TransectRibbons(), dx=10.0, dy=dx, order=:y)
+    # tr_set = transects_domain(acoustics, transect_width; dx=dx, buffer=buffer, order=order)
+    # box = boundingbox(tr_set)
+    # xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
+    # ygrid = range(box.min.coords.y.val, box.max.coords.y.val, step=dx)
+    # surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
+    #     if in(Point(x, y), tr_set)])
+    # return surveydomain, tr_set
+    domain = survey_domain(acoustics, method, order, dx, dy)
+    box = boundingbox(domain)
     xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
     ygrid = range(box.min.coords.y.val, box.max.coords.y.val, step=dx)
-    surveydomain = DataFrame([(;x, y) for x in xgrid, y in ygrid
-        if in(Point(x, y), tr_set)])
-    return surveydomain, tr_set
+    grid = DataFrame([(;x, y) for x in xgrid, y in ygrid
+        if in(Point(x, y), domain)])
+    return grid, domain
 end
+
 
 """
 Merge MACE's "macebase2.scaling_key_source_data" table with GAP's "racebase.specimen"
@@ -193,7 +236,9 @@ directory:
 - acoustics_projected.csv : Spatially-projected NASC by interval and scaling class.
 """
 function preprocess_survey_data(surveydir; ebs=true, log_ranges=nothing, dx=10.0, dy=dx, 
-        missingstring=[".", "NA"], transect_width=20, transect_buffer=0.2, transect_order=:y)
+        missingstring=[".", "NA"],
+        grid_method=TransectRibbons(), 
+        transect_order=:y)
     scaling_mace = CSV.read(joinpath(surveydir, "scaling_mace.csv"), DataFrame,
         missingstring=missingstring)
     trawl_locations_mace = CSV.read(joinpath(surveydir, "trawl_locations_mace.csv"), DataFrame,
@@ -249,8 +294,8 @@ function preprocess_survey_data(surveydir; ebs=true, log_ranges=nothing, dx=10.0
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
-    surveydomain, surveyhull = get_survey_grid(acoustics, transect_width=transect_width,
-        dx=dx, dy=dy, buffer=transect_buffer, order=transect_order)
+    surveydomain, surveyhull = get_survey_grid(acoustics, method=grid_method,
+        dx=dx, dy=dy, order=transect_order)
 
     xmin = minimum(acoustics.x)
     ymin = minimum(acoustics.y)
