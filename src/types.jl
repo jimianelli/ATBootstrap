@@ -4,7 +4,7 @@ Type definitions for data structures
 
 """
     ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
-        domain, dA)
+        grid, dA)
 
 Construct an `ATSurveyData` object, encapsulating all the relevant data 
 """
@@ -14,7 +14,7 @@ struct ATSurveyData
     age_length::DataFrame
     length_weight::DataFrame
     trawl_locations::DataFrame
-    domain::Meshes.Domain
+    grid::Meshes.PointSet
     dA::Number
 end
 
@@ -69,7 +69,7 @@ function ScalingClassProblem(surveydata, class;
         cal_error=0.1, age_max=10, maxlag=200.0, nlags=20, weightfunc=h -> 1/h,
         zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal])
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
-    variogram, geosetup = define_conditional_sim(acoustics_sub, surveydata.domain,
+    variogram, geosetup = define_conditional_sim(acoustics_sub, surveydata.grid,
         maxlag=maxlag, nlags=nlags, weightfunc=weightfunc)
     params = get_lungs_params(geosetup, variogram.model)
     optimal_dist = choose_z_distribution(zdist_candidates, acoustics_sub.nasc, params)
@@ -98,7 +98,7 @@ struct ATBootstrapProblem{TP<:ScalingClassProblem, TS<:AbstractString}
 end
 
 """
-    ATBootstrapProblem(surveydata, scaling_classes[; cal_error=0.1, age_max=10,
+    ATBootstrapProblem(surveydata[; scaling_classes, cal_error=0.1, age_max=10,
         zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
         maxlag=200, nlags=10, weightfunc=h -> 1/h])
 
@@ -106,8 +106,8 @@ Set up an `ATBootstrapProblem`, describing how to do bootstrap analyses of the
 acoustic-trawl survey recorded in `surveydata` for the scaling strata specified in 
 `scaling_classes`.
 """
-function ATBootstrapProblem(surveydata::ATSurveyData, scaling_classes::Vector{<:AbstractString};
-        cal_error=0.1, age_max=10,  
+function ATBootstrapProblem(surveydata::ATSurveyData;
+        scaling_classes=unique(surveydata.acoustics.class), cal_error=0.1, age_max=10,  
         zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
         maxlag=200.0, nlags=10, weightfunc=h -> 1/h)
     

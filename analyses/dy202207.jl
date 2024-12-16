@@ -18,7 +18,7 @@ ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true,  log_ranges=log_r
     # grid_method=ATB.SurveyHull(300))
     grid_method=ATB.TransectRibbons(width=40))
 
-(; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
+(; acoustics, scaling, age_length, length_weight, trawl_locations, surveygrid) = ATB.read_survey_files(surveydir)
 
 unique(scaling.class)
 # Other classes appear to be extra transects...?
@@ -32,9 +32,9 @@ acoustics = @subset(acoustics,
 @df trawl_locations scatter!(:x, :y, label="")
 
 surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
-    surveydomain, dA)
+    surveygrid, dA)
 
-atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes)
+atbp = ATB.ATBootstrapProblem(surveydata)
 
 sim_dists = ATB.zdists(atbp)
 sim_dists.survey .= survey

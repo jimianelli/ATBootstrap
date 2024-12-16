@@ -14,9 +14,8 @@ resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
 log_ranges = [(300, 3527.99), (3528, 3864.99), (5145, 7123.99), (7486, 25000)]
 
-ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, transect_width=20,
-    transect_buffer=0.1, log_ranges=log_ranges)
-(; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
+ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, log_ranges=log_ranges)
+(; acoustics, scaling, age_length, length_weight, trawl_locations, surveygrid) = ATB.read_survey_files(surveydir)
 
 scaling_classes = unique(scaling.class)
 scaling_classes = ["PK1", "BT"]
@@ -38,9 +37,9 @@ plot(p_xsects, p_trawls, xlabel="Easting (km)", ylabel="Northing (km)", aspect_r
 savefig(joinpath(@__DIR__, "plots", "DY201807_maps.png"))
 
 surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
-    surveydomain, dA)
+    surveygrid, dA)
 
-atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes)
+atbp = ATB.ATBootstrapProblem(surveydata)
 
 sim_dists = ATB.zdists(atbp)
 sim_dists.survey .= survey

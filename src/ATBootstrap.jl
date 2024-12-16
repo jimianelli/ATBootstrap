@@ -65,7 +65,7 @@ svector_coords(pt::Point) = SVector(pt.coords.x.val, pt.coords.y.val)
 
 function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurveyData,
         bs=BootSpecs(), i=1, scaling_sub = @subset(surveydata.scaling, :class .== scp.class),
-        surveydomain_coords = svector_coords.(surveydata.domain),
+        surveygrid_coords = svector_coords.(surveydata.grid),
         z0 = mean.(scp.zdists))
 
     selectivity_function = make_selectivity_function(bs.selectivity)
@@ -93,7 +93,7 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
         all_ages, bs.weights_at_age)
     
-    ii = trawl_assignments(surveydomain_coords, 
+    ii = trawl_assignments(surveygrid_coords, 
                 svector_coords.(domain(geotrawl_means)), bs.trawl_assignments)
 
     nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
@@ -144,12 +144,12 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         bs=BootSpecs())
 
     scaling_sub = @subset(surveydata.scaling, :class .== scp.class)
-    surveydomain_coords = svector_coords.(surveydata.domain)
+    surveygrid_coords = svector_coords.(surveydata.grid)
     z0 = mean.(scp.zdists)
 
     println("Bootstrapping $(scp.class)...")
     results = @showprogress map(1:nreplicates) do i
-        simulate_class_iteration(scp, surveydata, bs, i, scaling_sub, surveydomain_coords, z0)
+        simulate_class_iteration(scp, surveydata, bs, i, scaling_sub, surveygrid_coords, z0)
     end
 
     return vcat(results...)
@@ -236,7 +236,7 @@ that the directory contains files with the following names:
 - scaling.csv
 - age_length.csv
 - length_weight.csv
-- surveydomain.csv
+- surveygrid.csv
 These files are produced by running `download_survey.R`, which gets the files from
 Macebase and saves them to the survey data directory, followed by `preprocess_survey_data`,
 which projects everything geographically and averages it into spatial bins.
@@ -248,12 +248,10 @@ function read_survey_files(surveydir)
     scaling = DataFramesMeta.@transform(scaling, :sample_correction_scalar = float(:sample_correction_scalar))
     age_length = CSV.read(joinpath(surveydir, "age_length.csv"), DataFrame)
     length_weight = CSV.read(joinpath(surveydir, "length_weight.csv"), DataFrame)
-    surveydomain = CSV.read(joinpath(surveydir, "surveydomain.csv"), DataFrame)
-    surveydomain = DataFrames.shuffle(surveydomain) # this seems to fix the issue with directional artifacts
-    surveydomain =  PointSet(Point(x...) for x in eachrow(surveydomain))
-    return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
-    # return ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations,
-    #     surveydomain)
+    surveygrid = CSV.read(joinpath(surveydir, "surveygrid.csv"), DataFrame)
+    surveygrid = DataFrames.shuffle(surveygrid) # this seems to fix the issue with directional artifacts
+    surveygrid =  PointSet(Point(x...) for x in eachrow(surveygrid))
+    return (;acoustics, scaling, age_length, length_weight, trawl_locations, surveygrid)
 end
 
 function in_intervals(x::Real, intervals)

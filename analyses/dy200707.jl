@@ -15,16 +15,16 @@ dA = (resolution * km2nmi)^2
 log_ranges = [(0, 8275.49), (8358.5, 9072.5), (9271, 9685)]
 
 ATB.preprocess_survey_data(surveydir, dx=resolution, ebs=true, log_ranges=log_ranges)
-(; acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain) = ATB.read_survey_files(surveydir)
+(; acoustics, scaling, age_length, length_weight, trawl_locations, surveygrid) = ATB.read_survey_files(surveydir)
 
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
 surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
-    surveydomain, dA)
+    surveygrid, dA)
 
-atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes)
+atbp = ATB.ATBootstrapProblem(surveydata)
 
 sim_dists = ATB.zdists(atbp)
 sim_dists.survey .= survey

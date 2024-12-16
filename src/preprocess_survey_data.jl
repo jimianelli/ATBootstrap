@@ -74,22 +74,29 @@ function survey_domain(acoustics, method::TransectRibbons, order, dx, dy=dx)
 end
 
 function survey_domain(acoustics, method::SurveyHull, order, dx, dy=dx)
-    # transect_ends = @chain acoustics begin
-    #     sort(order)
-    #     @by(:log, 
-    #         :x = [first(:x), last(:x)], 
-    #         :y = [first(:y), last(:y)]
-    #     )
-    # end
-    transect_ends = @chain acoustics begin
+    unique_points = @chain acoustics begin
         @select(:x, :y)
         unique()
     end
-    v = [[row.x, row.y] for row in eachrow(transect_ends)]
+    v = [[row.x, row.y] for row in eachrow(unique_points)]
     hull = concave_hull(v, method.k)
     return Ngon([Point(x...) for x in hull.vertices]...)
 end
 
+"""
+    grid_domain(domain, dx[, dy=dx])
+
+Given a `GeometrySet` or `Domain` object, fill it with a dense rectangular grid with 
+resolution `dx` and `dy`. The centers of these grid cells are returned in a `DataFrame`.
+"""
+function grid_domain(domain, dx, dy=dx)
+    box = boundingbox(domain)
+    xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
+    ygrid = range(box.min.coords.y.val, box.max.coords.y.val, step=dx)
+    grid = DataFrame([(;x, y) for x in xgrid, y in ygrid
+        if in(Point(x, y), domain)])
+    return grid
+end
 
 """
     get_survey_grid(acoustics[; method=TransectRibbons(), dx=10.0, dy=dx, order=:y]])
@@ -108,14 +115,16 @@ of each transect for the purposes of defining the ribbon's boundaries. Defaults 
 since most of MACE's surveys have north-south transects. For east-west transects, use `:x`,
 and for curving transects use `:log`.
 
+# Returns
+A tuple `(grid, domain)`, where `grid` is a `DataFrame` contianing the x and y coordinates
+of each grid cell, and `domain` is a `GeometrySet` object that contains the geographic 
+boundaries of the survey domain (either as a single polygon hull or a collection of 
+transect ribbons).
+
 """
 function get_survey_grid(acoustics; method=TransectRibbons(), dx=10.0, dy=dx, order=:y)
     domain = survey_domain(acoustics, method, order, dx, dy)
-    box = boundingbox(domain)
-    xgrid = range(box.min.coords.x.val, box.max.coords.x.val, step=dx)
-    ygrid = range(box.min.coords.y.val, box.max.coords.y.val, step=dx)
-    grid = DataFrame([(;x, y) for x in xgrid, y in ygrid
-        if in(Point(x, y), domain)])
+    grid = grid_domain(domain, dx, dy)
     return grid, domain
 end
 
@@ -285,7 +294,7 @@ function preprocess_survey_data(surveydir; ebs=true, log_ranges=nothing, dx=10.0
     acoustics.x = [u.x / 1e3 for u in utm]
     acoustics.y = [u.y / 1e3 for u in utm]
 
-    surveydomain, surveyhull = get_survey_grid(acoustics, method=grid_method,
+    surveygrid, surveyhull = get_survey_grid(acoustics, method=grid_method,
         dx=dx, dy=dy, order=transect_order)
 
     xmin = minimum(acoustics.x)
@@ -329,5 +338,5 @@ function preprocess_survey_data(surveydir; ebs=true, log_ranges=nothing, dx=10.0
     CSV.write(joinpath(surveydir, "acoustics_projected.csv"), acoustics)
     CSV.write(joinpath(surveydir, "length_weight.csv"), length_weight)
     CSV.write(joinpath(surveydir, "trawl_locations_projected.csv"), trawl_locations)
-    CSV.write(joinpath(surveydir, "surveydomain.csv"), surveydomain)
+    CSV.write(joinpath(surveydir, "surveygrid.csv"), surveygrid)
 end
