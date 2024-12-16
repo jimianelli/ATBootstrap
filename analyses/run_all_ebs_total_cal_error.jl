@@ -1,3 +1,8 @@
+using CSV
+using DataFrames, DataFramesMeta
+using StatsPlots, StatsPlots.PlotMeasures
+using Statistics
+using Random
 include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 import .ATBootstrap as ATB
 
@@ -27,18 +32,21 @@ for survey in ebs_surveys
     if survey == "201807"
         scaling_classes = ["PK1", "BT"] 
     elseif survey == "202207"
-        scaling_classes = ["SS1", "BT"] 
+        scaling_classes = ["SS1", "SS2", "BT"] 
     else 
         scaling_classes = unique(scaling.class)
     end
 
     acoustics = @subset(acoustics,
-        in(scaling_classes).(:class), 
-        :transect .< 200)
+        in(scaling_classes).(:class))
+    if survey == "202207"
+        acoustics = @subset(acoustics, iseven.(:transect))
+    end
+
     surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
         surveydomain, dA)
 
-    atbp = ATB.ATBootstrapProblem(surveydata, scaling_classes, cal_error=cal_error)
+    atbp = ATB.ATBootstrapProblem(surveydata, cal_error=cal_error)
     results = ATB.simulate(atbp, surveydata, nreplicates = 500)
     CSV.write(joinpath(@__DIR__, "results", "results_total_cal_uncertianty_$(survey).csv"), results)
 end
@@ -46,9 +54,6 @@ end
 #=
 Plotting results
 =#
-using CSV
-using DataFrames, DataFramesMeta
-using StatsPlots
 
 ebs_result_files = joinpath.(@__DIR__, "results", "results_total_cal_uncertianty_" .* ebs_surveys .* ".csv")
 results = map(ebs_result_files) do f
@@ -74,8 +79,9 @@ unstack(year_age, :age, :year, :cv)
 
 # EVA-estimated CVs from cruise reports
 eva = DataFrame(
-    year = [2007, 2008, 2009, 2010, 2012, 2014, 2016, 2018, 2022],
-    cv_1d =   round.([.045, .076, .088, .060, .042, .046, .021, .044, .068] * 100, digits=1)
+    year = [2007, 2008, 2009, 2010, 2012, 2014, 2016, 2018, 2022, 2024],
+    cv_1d =   [3.8, 5.6, 6.9, 5.4, 3.4, 3.4, 1.9, 3.9, 6.8, 6.666],
+    biomass = [2.28, 1.404, 1.331, 2.636, 2.279, 4.743, 4.838, 2.497, 3.834, 2.871]
 )
 
 totals = @by(results, [:survey, :year, :variable, :i],
@@ -98,6 +104,7 @@ end
 @by(annual, :variable, :cv = mean(:cv))
 
 official_biomass = CSV.read(joinpath(@__DIR__, "../surveydata/official_biomass.csv"), DataFrame)
+official_biomass = @subset(official_biomass, :year .!= 2020)
 
 p_n = @df @subset(annual, :variable .== "n") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), 
@@ -110,6 +117,7 @@ p_b = @df @subset(annual, :variable .== "biomass") plot(:year, :value,
     series_annotation=text.(:cvstring, :left, :bottom, 9),
     xticks=2007:2022, xlims=(2006.5, 2024), ylims=(0, 7.5),
     xlabel="Year", ylabel="Biomass (MT)")
-plot!(p_b, official_biomass.year, official_biomass.biomass)
+plot!(p_b, official_biomass.year, official_biomass.biomass,
+    linestyle=:dash, label="Survey report")
 plot(p_n, p_b, layout=(2, 1), size=(800, 600), margin=20px, dpi=300)
 savefig(joinpath(@__DIR__, "plots", "timeseries_total_cal_error.png"))
