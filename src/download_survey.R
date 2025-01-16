@@ -222,7 +222,7 @@ download_acoustics <- function(connection, survey, ebs=TRUE) {
   }
 
   integrated = cellsdata %>%
-    # filter(zone <= zonemax) %>%
+    filter(zone <= zonemax) %>%
     group_by(survey, transect, interval, class) %>%
     summarize(nasc = sum(prc_nasc), .groups="drop") %>%
     left_join(intervalsdata, by=c("survey", "interval", "transect")) %>%
