@@ -19,7 +19,7 @@ function make_weight_function(length_weight, stochastic=true, nmin=5)
     μb = c[2,2]
     a = exp(μloga)
     b =  μb
-    Lmax = round(Int, maximum(length_weight.fork_length))
+    Lmax = 100
     all_lengths = DataFrame(fork_length = 1:Lmax)   
     binned = @chain length_weight_boot begin
         rightjoin(all_lengths, on=:fork_length)
@@ -27,7 +27,7 @@ function make_weight_function(length_weight, stochastic=true, nmin=5)
             :mean_weight = mean(:organism_weight),
             :n = length(:organism_weight))
         DataFramesMeta.@transform(
-            :weight = ifelse.(:n .> nmin, :mean_weight, a.*:fork_length.^b)
+            :weight = ifelse.(:n .>= nmin, :mean_weight, a.*:fork_length.^b)
         )
     end
     weight_dict = Dict(zip(binned.fork_length, binned.weight))
