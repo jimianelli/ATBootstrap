@@ -82,14 +82,13 @@ function plot_geosim_stats(atbp, surveydata, n=500)
         obs_nasc = @subset(surveydata.acoustics, prob.class .== :class).nasc
         sim_nascs = [simulate_nasc(prob) for _ in 1:n]
 
-        ph = histogram(obs_nasc, normalize=true, linewidth=0,
-            xlabel="NASC (m² nmi²)", ylabel="Probability density", 
-            label="Observed", title=prob.class)
-        density!(ph, sim_nascs[1], trim=true, alpha=0.2, linecolor="black", label="Simulated")
-        for nasc in sim_nascs[2:end]
-            density!(ph, nasc, trim=true, alpha=0.2, linecolor="black", label="")
-        end
-        xlims!(ph, 0, quantile(obs_nasc, 0.999))
+        qq = 0:0.01:1
+        q_obs = quantile(obs_nasc, qq)
+        q_sims = [quantile(nasc, qq) for nasc in sim_nascs]
+        ph = errorline(q_obs, hcat(q_sims...), errortype=:percentile, percentiles=[10, 90],
+            marker=:o, markerstrokewidth=0, markersize=2, fillalpha=0.5,
+            xlabel="Observed", ylabel="Simulated", label="Average QQ", title=prob.class)
+        plot!(ph, x -> x, 0, maximum(obs_nasc), label="1:1")
         push!(hist_plots, ph)
 
         pm = histogram(mean.(sim_nascs), normalize=true, linewidth=0, label="Simulated mean",
@@ -103,10 +102,9 @@ function plot_geosim_stats(atbp, surveydata, n=500)
         push!(sd_plots, ps)
     end
     nclasses = length(atbp.class_problems)
-    return plot(hist_plots..., mean_plots..., sd_plots...,
+    return plot(hist_plots..., mean_plots..., sd_plots..., margin=15px,
         layout=(3, length(atbp.class_problems)), size=(400*nclasses, 600))
 end
-
 """
 Make violin plots of pollock abundance- and biomass-at-age from the data frame `results`,
 the output of running `simulate`. Plotting options can be passed in as keyword arguments.
