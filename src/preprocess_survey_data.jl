@@ -35,7 +35,7 @@ end
 SurveyHull(k=10) = SurveyHull(k)
 
 
-function transect_ribbon(transect, transect_width, dx, buffer=0.05, ord=:y)
+function transect_ribbon(transect, transect_width, dx, buffer=0.1, ord=:y)
     tr1 = @chain transect begin
         @select(:x, :y, :log)
         stack(Not(ord))
@@ -123,6 +123,7 @@ transect ribbons).
 
 """
 function get_survey_grid(acoustics; method=TransectRibbons(), dx=10.0, dy=dx, order=:y)
+    nrow(acoustics) > 3 || error("Not enough locations to define survey grid.")
     domain = survey_domain(acoustics, method, order, dx, dy)
     grid = grid_domain(domain, dx, dy)
     return grid, domain
