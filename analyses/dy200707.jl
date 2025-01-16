@@ -30,6 +30,10 @@ sim_dists = ATB.zdists(atbp)
 sim_dists.survey .= survey
 CSV.write(joinpath(@__DIR__, "results", "zdists_$(survey).csv"),
     select(sim_dists, [:survey, :class, :zdist]))
+
+ATB.plot_geosim_stats(atbp, surveydata, 500)
+savefig(joinpath(@__DIR__, "plots", "conditional_nasc_stats_$(survey).png"))
+
     
 # Inspect the variograms to make sure they look ok
 ATB.plot_class_variograms(atbp, legend=:bottomright)

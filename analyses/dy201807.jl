@@ -60,7 +60,8 @@ nasc_plots = map(1:6) do _
     nasc = ATB.simulate_nasc(cp1)
     scatter(sim_domain.x, sim_domain.y, zcolor=nasc, markershape=:square,
         markerstrokewidth=0, markersize=1.7, legend=false, aspect_ratio=:equal,
-        clim=(0, 3000), xlabel="Easting (km)", ylabel="Northing (km)")
+        clim=(0, 1500),
+        xlabel="Easting (km)", ylabel="Northing (km)")
 end
 plot(nasc_plots..., layout=(2, 3), size=(1200, 800), margin=15px)
 savefig(joinpath(@__DIR__, "plots", "conditional_nasc.png"))

@@ -30,6 +30,8 @@ sim_dists = ATB.zdists(atbp)
 sim_dists.survey .= survey
 CSV.write(joinpath(@__DIR__, "results", "zdists_$(survey).csv"),
     select(sim_dists, [:survey, :class, :zdist]))
+ATB.plot_geosim_stats(atbp, surveydata, 500)
+savefig(joinpath(@__DIR__, "plots", "conditional_nasc_stats_$(survey).png"))
     
 # Inspect the variograms to make sure they look ok
 ATB.plot_class_variograms(atbp, legend=:bottomright)
@@ -43,7 +45,6 @@ dom = ATB.solution_domain(cp1)
 scatter(dom.x, dom.y, zcolor=nasc, markerstrokewidth=0, legend=false, title="2016")
 scatter!(acoustics.x, acoustics.y, color=:white, markerstrokewidth=0, markersize=2)
 
-ATB.plot_geosim_stats(atbp, surveydata)
 # Do the bootstrap uncertainty analysis
 results = ATB.simulate(atbp, surveydata, nreplicates = 500)
 ATB.plot_boot_results(results)
