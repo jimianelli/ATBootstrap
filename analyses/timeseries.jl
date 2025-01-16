@@ -7,6 +7,15 @@ using ColorSchemes
 ebs_surveys = ["200707", "200809", "200909", "201006", "201207", "201407", "201608",
     "201807", "202207", "202408"]
 ebs_result_files = joinpath.(@__DIR__, "results", "results_" .* ebs_surveys .* ".csv")
+zdist_files = joinpath.(@__DIR__, "results", "zdists_" .* ebs_surveys .* ".csv")
+
+zdists = map(zdist_files) do f
+    CSV.read(f, DataFrame)
+end
+zdists = vcat(zdists...)
+@by(zdists, :zdist, :n = length(:zdist))
+@by(zdists, [:class, :zdist], :n = length(:zdist))
+
 # filter(f -> contains(f, "results"), readdir(@__DIR__, join=true))
 
 results = map(ebs_result_files) do f
@@ -34,7 +43,7 @@ unstack(year_age, :age, :year, :cv)
 eva = DataFrame(
     year = [2007, 2008, 2009, 2010, 2012, 2014, 2016, 2018, 2022, 2024],
     # cv_1d =   round.([.045, .076, .088, .060, .042, .046, .021, .044, .068] * 100, digits=1)
-    cv_1d =   [3.8, 5.6, 6.9, 5.4, 3.4, 3.4, 1.9, 3.9, 6.8, 6.666],
+    cv_1d =   [3.8, 5.6, 6.9, 5.4, 3.4, 3.4, 1.9, 3.9, 6.8, 5.6],
     biomass = [2.28, 1.404, 1.331, 2.636, 2.279, 4.743, 4.838, 2.497, 3.834, 2.871]
 )
 
@@ -69,7 +78,10 @@ annual = @chain results begin
     @orderby(:variable, :year)
 end
 
-@by(annual, :variable, :cv = mean(:cv))
+@by(annual, :variable, 
+    :mean = mean(:cv),
+    :min = minimum(:cv),
+    :max = maximum(:cv))
 
 p_n = @df @subset(annual, :variable .== "n") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), 
@@ -82,7 +94,7 @@ p_b = @df @subset(annual, :variable .== "biomass") plot(:year, :value,
     series_annotation=text.(:cvstring, :left, :bottom, 9),
     xticks=2007:2024, xlims=(2006.5, 2026), ylims=(0, 6),
     xlabel="Year", ylabel="Biomass (MT)")
-plot!(p_b, eva.year, eva.biomass, linestyle=:dash, label="Survey report")
+# plot!(p_b, eva.year, eva.biomass, linestyle=:dash, label="Survey report")
 plot(p_n, p_b, layout=(2, 1), size=(800, 600), margin=20px, dpi=300)
 savefig(joinpath(@__DIR__, "plots", "timeseries.png"))
 
@@ -100,23 +112,23 @@ m_n = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "n"))
 m_biomass = lm(@formula(cv ~ cv_1d), @subset(annual, :variable .== "biomass"))
 m = lm(@formula(cv ~ cv_1d * variable), annual)
 df_pred = DataFrame(
-    cv_1d = repeat(1:10.0, outer=2),
-    variable=repeat(["n", "biomass"], inner=10)
+    cv_1d = repeat(1:10.0, outer=1),
+    variable=repeat(["biomass"], inner=10)
 )
 df_pred = [df_pred predict(m, df_pred, interval=:confidence)]
 
 # plot regressions
 p_reg = @df df_pred plot(:cv_1d, :prediction, 
     ribbon=(:prediction .- :lower, :upper .- :prediction), 
-    group=:variable, color=[2 1], fillalpha=0.2, label="")
-@df annual scatter!(p_reg, :cv_1d, :cv, group=:variable, label=["Biomass" "Abundance"],
-    color=[2 1], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)",
+    color=[2], fillalpha=0.2, label="")
+@df annual scatter!(p_reg, :cv_1d, :cv, label="Biomass",
+    color=[2], xlabel="1D C.V. (%)", ylabel="Bootstrap C.V. (%)",
     title="(b)", titlealign=:left, legend=:bottomright)
 
 plot(p_cv, p_reg, size=(900, 350), margin=15px)
 savefig(joinpath(@__DIR__, "plots", "bootstrap_vs_1d.png"))
 
-@by(annual, :variable, :ratio = median(:cv ./ :cv_1d))
+@by(annual, :variable, :ratio = mean(:cv ./ :cv_1d))
 
 annual_age = @chain results begin
     @subset(:species_code .== 21740)
@@ -124,6 +136,8 @@ annual_age = @chain results begin
     @transform(:cv = :std ./ :mean)
     @transform(:upper = :mean .+ 2 * :std, :lower = :mean .- 2 * :std)
 end
+
+@by(annual_age, :variable, :lower = quantile(:cv, 0.25), :upper = quantile(:cv, 0.75))
 
 plots_n = map(unique(results.year)) do year
     df = @subset(results, :variable.=="n", :year .== year)
@@ -231,15 +245,28 @@ error_series = DataFramesMeta.@transform(error_series,
         "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"])
 )
 
-
 pe1 = @df @subset(error_series, :variable.=="Abundance") plot(:year, :cv, group=:error_label,
     ylabel="C.V. (Numbers)", palette=:tableau_10)
 pe2 = @df @subset(error_series, :variable.=="Biomass") plot(:year, :cv, group=:error_label,
     ylabel="C.V. (Biomass)", palette=:tableau_10)
 plot(pe1, pe2, marker=:o, layout=(2,1), legend=:outerright, ylims=(-0.01, 0.45),
-    linewidth=3, xticks=2007:2022, size=(1000, 600), margin=20px)
+    linewidth=3, xticks=2008:2:2024, size=(800, 500), margin=20px)
 savefig(joinpath(@__DIR__, "plots", "error_timeseries.png"))
 
+@chain error_series begin
+    @subset(:added_error .== "simulate_nasc")
+    @orderby(:variable, :cv)
+end
+
+@chain error_series begin
+    # @subset(:added_error .== "simulate_nasc")
+    @by([:variable, :error_label], 
+        :mean = mean(:cv),
+        :min = minimum(:cv),
+        :max = maximum(:cv)
+    )
+    @orderby(:variable, :mean)
+end
 
 error_summary = @chain error_series begin
     @by([:error_label, :variable], 
