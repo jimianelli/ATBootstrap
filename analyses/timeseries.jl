@@ -57,12 +57,21 @@ p2 = @df @subset(totals, :variable.=="biomass") density(:value, group=:year,
 plot(p1, p2, fill=true, fillalpha=0.5, size=(1000, 500), margin=20px)
 savefig(joinpath(@__DIR__, "plots", "total_cv_distributions.png"))
 
-qqps = map(unique(totals.year)) do year
+qqps_abundance = map(unique(totals.year)) do year
     df = @subset(totals, :year .== year)
-    @df @subset(df, :variable.=="biomass") qqnorm(:value, title=year, markerstrokewidth=0)
+    @df @subset(df, :variable.=="n") qqnorm(:value, title=year, markerstrokewidth=0,
+        markercolor=1, linecolor=:black)
 end
-plot(qqps..., size=(800, 800))
-savefig(joinpath(@__DIR__, "plots", "qq_normal_plots.png"))
+plot(qqps_abundance..., size=(800, 800))
+savefig(joinpath(@__DIR__, "plots", "qq_normal_plots_abundance.png"))
+
+qqps_biomass = map(unique(totals.year)) do year
+    df = @subset(totals, :year .== year)
+    @df @subset(df, :variable.=="biomass") qqnorm(:value, title=year, markerstrokewidth=0,
+        markercolor=2, linecolor=:black)
+end
+plot(qqps_biomass..., size=(800, 800))
+savefig(joinpath(@__DIR__, "plots", "qq_normal_plots_biomass.png"))
 
 annual = @chain results begin
     @by([:survey, :year, :variable, :i], 
@@ -82,6 +91,7 @@ end
     :mean = mean(:cv),
     :min = minimum(:cv),
     :max = maximum(:cv))
+mean(eva.cv_1d)
 
 p_n = @df @subset(annual, :variable .== "n") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), 
@@ -137,7 +147,10 @@ annual_age = @chain results begin
     @transform(:upper = :mean .+ 2 * :std, :lower = :mean .- 2 * :std)
 end
 
-@by(annual_age, :variable, :lower = quantile(:cv, 0.25), :upper = quantile(:cv, 0.75))
+@by(annual_age, :variable, 
+    :mean = mean(:cv),
+    :lower = quantile(:cv, 0.25),
+    :upper = quantile(:cv, 0.75))
 
 plots_n = map(unique(results.year)) do year
     df = @subset(results, :variable.=="n", :year .== year)
