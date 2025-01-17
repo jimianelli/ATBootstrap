@@ -82,13 +82,13 @@ function plot_geosim_stats(atbp, surveydata, n=500)
         obs_nasc = @subset(surveydata.acoustics, prob.class .== :class).nasc
         sim_nascs = [simulate_nasc(prob) for _ in 1:n]
 
-        qq = 0:0.01:1
+        qq = 0.01:0.01:0.99
         q_obs = quantile(obs_nasc, qq)
         q_sims = [quantile(nasc, qq) for nasc in sim_nascs]
-        ph = errorline(q_obs, hcat(q_sims...), errortype=:percentile, percentiles=[10, 90],
+        ph = errorline(q_obs, hcat(q_sims...), errortype=:percentile, percentiles=[5, 95],
             marker=:o, markerstrokewidth=0, markersize=2, fillalpha=0.5,
             xlabel="Observed", ylabel="Simulated", label="Average QQ", title=prob.class)
-        plot!(ph, x -> x, 0, maximum(obs_nasc), label="1:1")
+        plot!(ph, x -> x, 0, quantile(obs_nasc, 0.99), label="1:1")
         push!(hist_plots, ph)
 
         pm = histogram(mean.(sim_nascs), normalize=true, linewidth=0, label="Simulated mean",
