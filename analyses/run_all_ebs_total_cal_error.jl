@@ -10,7 +10,7 @@ import .ATBootstrap as ATB
 km2nmi = 1 / 1.852
 resolution = 10.0 # km
 dA = (resolution * km2nmi)^2
-cal_error = 0.647
+cal_error = 1.16
 
 ebs_surveys = [
     "200707",
