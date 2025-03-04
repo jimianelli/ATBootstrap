@@ -169,7 +169,8 @@ By default, abundance and biomass are reported for pollock by age class. Abundan
 calculated for other species (but not biomasses, and not by age, since this code 
 doesn't put together the length-age and length-weight tables for them). If you would like
 to return the abundance results for other species, you can list their species codes in the
-optional `report_species` argument. 
+optional `report_species` argument. For *all* species and ages, pass in empty arrays (`[]`)
+for `report_species` and `report_ages`.
 
 For pollock, you can limit the ages reported by passing them to the `report_ages` argument.
 Note that this just subsets the results post-simulation; to set the maximum age see the 
