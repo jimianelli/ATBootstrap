@@ -39,7 +39,7 @@ year-class for pollock.
 function make_all_categories(scaling, age_max, aged_species=[21740])
     event_ids = unique(scaling.event_id)
     ages = 0:age_max
-    unaged_species = setdiff(event_ids, aged_species)
+    unaged_species = setdiff(scaling.species_code, aged_species)
     with_ages = allcombinations(DataFrame,
         event_id = event_ids,
         age = ages,

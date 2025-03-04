@@ -179,12 +179,19 @@ function simulate(atbp::ATBootstrapProblem, surveydata::ATSurveyData; nreplicate
         bs=BootSpecs(), report_species=[21740], report_ages=1:first(atbp.class_problems).age_max)
     
     class_results = map(p -> simulate_class(p, surveydata; nreplicates, bs), atbp.class_problems)
+    if length(report_species) == 0
+        report_species = unique(surveydata.scaling.species_code)
+    end
+    if length(report_ages) == 0
+        report_ages = [-1; 1:first(atbp.class_problems).age_max]
+    end
     results = @chain vcat(class_results...) begin
         @subset(
             in(report_ages).(:age),
             in(report_species).(:species_code)
         )
         @by([:i, :species_code, :age], :n = sum(:n), :biomass = sum(:biomass))
+        DataFramesMeta.@transform(:age = replace(:age, -1 => missing))
     end
     return results
 end
