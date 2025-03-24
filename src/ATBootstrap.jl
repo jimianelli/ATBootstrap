@@ -99,21 +99,42 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
     cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
 
-    df = DataFrame(
+    nasc_df = DataFrame(
         nasc = nasc * cal_error_sim,
-        class = scp.class,
         event_id = trawl_means.event_id[ii]
     )
     # remove nearbottom intercept from nasc (from Nate's paper)
-    df.nasc[df.class .== "BT"] .-= nearbottom_intercept
-    df.nasc .= max.(df.nasc, 0) # make sure we don't end up with negative backscatter
+    if scp.class == "BT"
+        nasc_df.nasc .-= nearbottom_intercept
+        nasc_df.nasc .= max.(nasc_df.nasc, 0) # make sure we don't end up with negative backscatter
+    end
 
-    df = @chain df begin
-        leftjoin(@select(trawl_means, :event_id, :sigma_bs), on=:event_id)
-        leftjoin(category_comp, on=:event_id)
-        DataFrames.stack(Not([:event_id, :class, :nasc, :sigma_bs]),
-            variable_name=:category, value_name=:p_cat)
-        DataFramesMeta.@transform(:n = :nasc ./ (4π .* :sigma_bs) .* :p_cat)
+    use_ages = in([21740])
+    trawl_means_cat = @chain scaling_boot begin
+        DataFramesMeta.@transform(
+            :category = _category.(use_ages, :species_code, :age),
+            :p_nasc = :sigma_bs .* :w
+        )
+        @by([:event_id, :category], 
+            :sigma_bs = mean(:sigma_bs, Weights(:w)),
+            :w = sum(:w),
+            :p_nasc = sum(:p_nasc)
+        )
+        DataFrames.groupby(:event_id)
+        DataFramesMeta.@transform(:p_nasc = :p_nasc ./ sum(:p_nasc))
+        @subset(isfinite.(:sigma_bs))
+    end
+
+    category_nasc = unstack(trawl_means_cat, :event_id, :category, :p_nasc, fill=0)
+    category_sigma = @select(trawl_means_cat, :event_id, :category, :sigma_bs)
+
+    df = @chain nasc_df begin
+        leftjoin(category_nasc, on=:event_id)
+        DataFrames.stack(Not([:event_id, :nasc]),
+            variable_name=:category, value_name=:p_nasc)
+        leftjoin(category_sigma, on=[:event_id, :category])
+        dropmissing()
+        DataFramesMeta.@transform(:n = :nasc .* :p_nasc ./ (4π .* :sigma_bs))
         @by(:category,
             :n = sum(skipmissing(:n)) * surveydata.dA)
         DataFramesMeta.@transform(
