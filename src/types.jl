@@ -37,7 +37,7 @@ julia> BootSpecs(false) # turn off all errors--i.e., do a normal deterministic a
     selectivity::Bool=true
     predict_ts::Bool=true
     resample_scaling::Bool=true
-    drop_trawl::Bool=true
+    nearbottom_coefs::Bool=true
     age_length::Bool=true
     weights_at_age::Bool=true
     trawl_assignments::Bool=true
@@ -55,11 +55,14 @@ struct ScalingClassProblem
     zdists
     cal_error
     age_max
+    aged_species
 end
 
 """
-    ScalingClassProblem(surveydata, class[, cal_error=0.1, age_max=10,
-        zdist_candidates=zdist_candidates, maxlag=200.0, nlags=20, weightfunc=h -> 1/h])
+    ScalingClassProblem(surveydata, class[, cal_error=0.1, age_max=10, maxlag=200,
+        nlags=20, weightfunc=h -> 1/h,
+        zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
+        aged_species=[21740]])
 
 Set up a `ScalingClassProblem`, specifying how to perform geostatistical simulations of
 backscatter in scaling stratum `class`, conditional on the observed NASC values in 
@@ -67,7 +70,8 @@ backscatter in scaling stratum `class`, conditional on the observed NASC values 
 """
 function ScalingClassProblem(surveydata, class; 
         cal_error=0.1, age_max=10, maxlag=200.0, nlags=20, weightfunc=h -> 1/h,
-        zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal])
+        zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
+        aged_species=[21740])
     acoustics_sub = @subset(surveydata.acoustics, :class .== class)
     variogram, geosetup = define_conditional_sim(acoustics_sub, surveydata.grid,
         maxlag=maxlag, nlags=nlags, weightfunc=weightfunc)
@@ -75,7 +79,7 @@ function ScalingClassProblem(surveydata, class;
     optimal_dist = choose_z_distribution(zdist_candidates, acoustics_sub.nasc, params)
     zdists = parameterize_zdists(optimal_dist, params)
     return ScalingClassProblem(class, variogram, geosetup, params, optimal_dist, zdists,
-        cal_error, age_max)
+        cal_error, age_max, aged_species)
 end
 
 """
@@ -92,10 +96,14 @@ function solution_domain(scp::ScalingClassProblem, variable=:nasc)
     return DataFrame(x=x, y=y)
 end
 
-struct ATBootstrapProblem{TP<:ScalingClassProblem, TS<:AbstractString}
-    class_problems::Vector{TP}
-    scaling_classes::Vector{TS}
+struct ATBootstrapProblem
+    class_problems
+    scaling_classes
+    age_max
+    aged_species
 end
+
+ 
 
 """
     ATBootstrapProblem(surveydata[; scaling_classes, cal_error=0.1, age_max=10,
@@ -106,16 +114,16 @@ Set up an `ATBootstrapProblem`, describing how to do bootstrap analyses of the
 acoustic-trawl survey recorded in `surveydata` for the scaling strata specified in 
 `scaling_classes`.
 """
-function ATBootstrapProblem(surveydata::ATSurveyData;
-        scaling_classes=unique(surveydata.acoustics.class), cal_error=0.1, age_max=10,  
-        zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
+function ATBootstrapProblem(surveydata::ATSurveyData; age_max=10,
+        aged_species=[21740], scaling_classes=unique(surveydata.acoustics.class),
+        cal_error=0.1, zdist_candidates=[Gamma, InverseGamma, InverseGaussian, LogNormal],
         maxlag=200.0, nlags=10, weightfunc=h -> 1/h)
     
     class_problems = map(scaling_classes) do class
         println("Preparing $(class)...")
         return ScalingClassProblem(surveydata, class, maxlag=maxlag, nlags=nlags,
             age_max=age_max, cal_error=cal_error, weightfunc=weightfunc, 
-            zdist_candidates=zdist_candidates)
+            zdist_candidates=zdist_candidates, aged_species=aged_species)
     end
-    return ATBootstrapProblem(class_problems, scaling_classes)
+    return ATBootstrapProblem(class_problems, scaling_classes, age_max, aged_species)
 end

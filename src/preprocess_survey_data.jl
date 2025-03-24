@@ -152,12 +152,13 @@ function merge_scaling(scaling_mace, scaling_gap)
             :class = "BT",
             :primary_length = :length ./ 10,
             :ts_length = :length ./ 10, # not exactly right
-            :catch_sampling_expansion = 1,
-            :sample_correction_scalar = 1,
-            :haul_weight = 1,
-            :w = 1
+            :catch_sampling_expansion = 1.0,
+            :sample_correction_scalar = 1.0,
+            :user_defined_expansion = 1.0,
+            :haul_weight = 1.0,
+            :w = 1.0
         )
-        leftjoin(nearbottom_coefs, on=:species_code)
+        # leftjoin(nearbottom_coefs, on=:species_code)
         leftjoin(ts_key, on=:species_code)
         DataFramesMeta.@transform(
             :ts_relationship = replace(:ts_relationship, missing => "generic_swimbladder_fish")

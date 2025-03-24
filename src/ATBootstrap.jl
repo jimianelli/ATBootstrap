@@ -72,59 +72,52 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     scaling_boot = resample_scaling(scaling_sub, bs.resample_scaling)
     apply_selectivity!(scaling_boot, selectivity_function)
 
-    predict_ts = make_ts_function(bs.predict_ts)
+    predict_ts = make_ts_function()
     predict_age = make_age_length_function(surveydata.age_length, scp.age_max,
         bs.age_length)
+    
     scaling_boot = DataFramesMeta.@transform!(scaling_boot,
-        :sigma_bs = exp10.(predict_ts.(:ts_relationship, :ts_length) ./ 10),
+        :sigma_bs = to_linear.(predict_ts.(:ts_relationship, :ts_length, bs.predict_ts)),
         :age = predict_age.(:primary_length))
     
-    trawl_means = get_trawl_means(scaling_boot, surveydata.trawl_locations)
-    if bs.drop_trawl
-        popat!(trawl_means, rand(1:nrow(trawl_means)))
-    end
-    geotrawl_means = @chain trawl_means begin
-        @select(:x, :y, :ts, :length) 
+    geotrawls = @chain scaling_boot begin
+        @by(:event_id, :class = first(:class))
+        innerjoin(surveydata.trawl_locations, on=:event_id)
+        @select(:x, :y)
         georef((:x, :y))
     end
+
     all_ages = make_all_ages(scaling_boot, scp.age_max)
-    all_categories = make_all_categories(scaling_boot, scp.age_max)
-    category_comp = proportion_at_category(scaling_boot, all_categories)
     age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
         all_ages, bs.weights_at_age)
     
     ii = trawl_assignments(surveygrid_coords, 
-                svector_coords.(domain(geotrawl_means)), bs.trawl_assignments)
+                svector_coords.(domain(geotrawls)), bs.trawl_assignments)
 
     nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
     cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
-
     nasc_df = DataFrame(
         nasc = nasc * cal_error_sim,
-        event_id = trawl_means.event_id[ii]
+        event_id = surveydata.trawl_locations.event_id[ii]
     )
-    # remove nearbottom intercept from nasc (from Nate's paper)
+
+    # Special-case processing for bottom-trawl stratum
     if scp.class == "BT"
-        nasc_df.nasc .-= nearbottom_intercept
+        # weight scaling data with Nate's nearbottom coefficients
+        nearbottom_dict = make_nearbottom_dict(bs.nearbottom_coefs)
+        apply_nearbottom_coefficient!(scaling_boot, nearbottom_dict)
+        # If species is not pollock, make TS deterministic (variability in backscatter
+        # allocation has already been accounted for with nearbottom coefficients)
+        scaling_boot = DataFramesMeta.@transform(scaling_boot,
+            @byrow :sigma_bs = :species_code == 21740 ? 
+                :sigma_bs : to_linear(predict_ts(:ts_relationship, :ts_length, false))
+        )
+        # remove nearbottom intercept from nasc (from Nate's paper)
+        # nasc_df.nasc .-= nearbottom_intercept
         nasc_df.nasc .= max.(nasc_df.nasc, 0) # make sure we don't end up with negative backscatter
     end
 
-    use_ages = in([21740])
-    trawl_means_cat = @chain scaling_boot begin
-        DataFramesMeta.@transform(
-            :category = _category.(use_ages, :species_code, :age),
-            :p_nasc = :sigma_bs .* :w
-        )
-        @by([:event_id, :category], 
-            :sigma_bs = mean(:sigma_bs, Weights(:w)),
-            :w = sum(:w),
-            :p_nasc = sum(:p_nasc)
-        )
-        DataFrames.groupby(:event_id)
-        DataFramesMeta.@transform(:p_nasc = :p_nasc ./ sum(:p_nasc))
-        @subset(isfinite.(:sigma_bs))
-    end
-
+    trawl_means_cat = get_trawl_category_means(scaling_boot, scp.aged_species)
     category_nasc = unstack(trawl_means_cat, :event_id, :category, :p_nasc, fill=0)
     category_sigma = @select(trawl_means_cat, :event_id, :category, :sigma_bs)
 

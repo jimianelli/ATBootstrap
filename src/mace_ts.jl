@@ -84,13 +84,16 @@ const ts_lookup = Dict(                   # TS function (38 kHz, length in cm)  
     "standard_pollock" =>           TSSpec(standard_pollock_ts,             0.14),
 )
 
-function make_ts_function(stochastic=false)
-    error_dict = Dict(k => randn() * ts_lookup[k].s for k in keys(ts_lookup))
+function make_ts_function()#stochastic=false)
+    error_dict = Dict(relationship => randn() * ts_lookup[relationship].s
+       for relationship in keys(ts_lookup))
     
-    function predict_ts(relationship, L)
+    function predict_ts(relationship, L, stochastic=false)
         f, s = ts_lookup[relationship]
         err = stochastic ? error_dict[relationship] : 0.0
         f(L) + err
     end
     return predict_ts
 end
+
+to_linear(x) = exp10(x / 10)
