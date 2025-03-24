@@ -83,7 +83,8 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     geotrawls = @chain scaling_boot begin
         @by(:event_id, :class = first(:class))
         innerjoin(surveydata.trawl_locations, on=:event_id)
-        @select(:x, :y)
+        @orderby(:event_id)
+        @select(:event_id, :x, :y)
         georef((:x, :y))
     end
 
@@ -98,7 +99,7 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
     nasc_df = DataFrame(
         nasc = nasc * cal_error_sim,
-        event_id = surveydata.trawl_locations.event_id[ii]
+        event_id = geotrawls.event_id[ii]
     )
 
     # Special-case processing for bottom-trawl stratum
