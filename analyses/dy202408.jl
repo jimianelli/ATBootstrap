@@ -1,6 +1,6 @@
 using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
-using Random
+using StableRNGs
 using StatsPlots, StatsPlots.PlotMeasures
 using GeoStats
 
@@ -8,7 +8,7 @@ include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 import .ATBootstrap as ATB
 
 survey = "202408"
-Random.seed!(parse(Int, survey))
+StableRNGs.seed!(parse(Int, survey))
 surveydir = joinpath(@__DIR__, "..", "surveydata", survey)
 const km2nmi = 1 / 1.852
 resolution = 10.0 # km
@@ -72,7 +72,7 @@ ATB.plot_error_source_by_age(results_step, results, :n)
 results_totals = ATB.merge_results(results, results_step)
 CSV.write(joinpath(@__DIR__, "results", "stepwise_error_$(survey).csv"), results_totals)
 
-# plot_error_sources(results_totals, plot_title=survey, xticks=0:0.01:0.15, size=(800, 500))
+ATB.plot_error_sources(results_totals, plot_title=survey, xticks=0:0.01:0.15, size=(800, 500))
 
 @chain results_step begin
     @subset(:species_code .== 21740)

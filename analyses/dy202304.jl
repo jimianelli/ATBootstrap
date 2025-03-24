@@ -15,7 +15,7 @@ resolution = 2.0 # k
 preprocess_survey_data(surveydir, resolution)
 const km2nmi = 1 / 1.852
 
-acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain = read_survey_files(surveydir)
+acoustics, scaling, age_length, length_weight, trawl_locations, surveygrid = read_survey_files(surveydir)
 
 unique(scaling.class)
 scaling_classes = ["SS1"]
@@ -43,17 +43,17 @@ surveyhull = concave_hull(v.+0.1.*randn.(2), 10) # needs jitter for some reason?
 dx = dy = resolution
 xgrid = range(round.(extrema(transect_ends.x))..., step=dx)
 ygrid = range(round.(extrema(transect_ends.y))..., step=dy)
-surveydomain = shuffle([(x, y) for x in xgrid, y in ygrid if in_hull([x, y], surveyhull)])
-surveydomain = PointSet(surveydomain)
+surveygrid = shuffle([(x, y) for x in xgrid, y in ygrid if in_hull([x, y], surveyhull)])
+surveygrid = PointSet(surveygrid)
 
 @df acoustics scatter(:x, :y, group=:class, aspect_ratio=:equal,
     markersize=:nasc/500, markerstrokewidth=0, alpha=0.5, size=(800, 800))
 @df trawl_locations scatter!(:x, :y, label="")
 @df transect_ends scatter!(:x, :y, label="")
 plot!(surveyhull)
-plot!(surveydomain, markersize=1)
+plot!(surveygrid, markersize=1)
 
-surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveydomain)
+surveydata = ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, surveygrid)
 
 cal_error = 0.1 # dB
 dA = (resolution * km2nmi)^2
