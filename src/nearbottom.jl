@@ -25,9 +25,7 @@ nearbottom_coefs = DataFramesMeta.@transform(nearbottom_coefs,
 const nearbottom_intercept = 3.43
 # bar(nearbottom_coefs.nearbottom_group, nearbottom_coefs.a)
 
-nearbottom_coefs = @chain leftjoin(species, nearbottom_coefs, on=:nearbottom_group) begin
-    # @select(:species_code, :user_defined_expansion = :a)
-end
+nearbottom_coefs = leftjoin(species, nearbottom_coefs, on=:nearbottom_group)
 
 function make_nearbottom_dict(stochastic=true)
     if stochastic
