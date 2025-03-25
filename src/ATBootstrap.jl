@@ -239,12 +239,12 @@ end
 # Ordered, categorical labels for stepwise error results
 error_labels = DataFrame(
     added_error = ["calibration", "simulate_nasc", "selectivity", "resample_scaling",
-        "drop_trawl", "trawl_assignments", "predict_ts", "age_length", "weights_at_age", "All"],
+        "nearbottom_coefs", "trawl_assignments", "predict_ts", "age_length", "weights_at_age", "All"],
     error_label = CategoricalArray(
         ["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
-        "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"],
+        "Nearbottom coefs", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"],
         levels=["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
-        "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"]
+        "Nearbottom coefs", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"]
     )
 )
 
