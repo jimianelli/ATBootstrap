@@ -105,6 +105,7 @@ download_trawl_locations_gap <- function(connection, survey) {
   query = glue("SELECT 
     racebase.haul.hauljoin, 
     racebase.haul.cruise, 
+    racebase.haul.vessel,
     racebase.haul.haul,
     racebase.haul.duration, 
     racebase.haul.distance_fished, 
@@ -120,7 +121,7 @@ download_trawl_locations_gap <- function(connection, survey) {
     and floor(cruise/100) = {year};")
   trawl_locations_gap <- dbGetQuery(connection, query)
   trawl_locations_gap <- cleanup(trawl_locations_gap) %>%
-    mutate(survey = cruise, event_id = -haul,
+    mutate(survey = cruise, event_id = haul,
       latitude = start_latitude, longitude=start_longitude) %>%
     select(survey, event_id, latitude, longitude)
   return(trawl_locations_gap)

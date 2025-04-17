@@ -81,10 +81,9 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
         :age = predict_age.(:primary_length))
     
     geotrawls = @chain scaling_boot begin
-        @by(:event_id, :class = first(:class))
-        innerjoin(surveydata.trawl_locations, on=:event_id)
-        @orderby(:event_id)
-        @select(:event_id, :x, :y)
+        @by(:haul_id, :class = only(unique(:class)))
+        innerjoin(surveydata.trawl_locations, on=:haul_id)
+        @select(:haul_id, :x, :y)
         georef((:x, :y))
     end
 
@@ -99,7 +98,7 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
     nasc_df = DataFrame(
         nasc = nasc * cal_error_sim,
-        event_id = geotrawls.event_id[ii]
+        haul_id = geotrawls.haul_id[ii]
     )
 
     # Special-case processing for bottom-trawl stratum
@@ -118,17 +117,22 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
         nasc_df.nasc .= max.(nasc_df.nasc, 0) # make sure we don't end up with negative backscatter
     end
 
-    trawl_means_cat = get_trawl_category_means(scaling_boot, scp.aged_species)
-    category_nasc = unstack(trawl_means_cat, :event_id, :category, :p_nasc, fill=0)
-    category_sigma = @select(trawl_means_cat, :event_id, :category, :sigma_bs)
+    predict_weight = make_weight_function(surveydata.length_weight)
+    trawl_means_cat = get_trawl_category_means(scaling_boot, scp.aged_species, predict_weight)
+    category_nasc = unstack(trawl_means_cat, :haul_id, :category, :p_nasc, fill=0)
+    category_sigma = @select(trawl_means_cat, :haul_id, :category, :sigma_bs)
+    category_weight = @select(trawl_means_cat, :haul_id, :category, :weight)
+
 
     df = @chain nasc_df begin
-        leftjoin(category_nasc, on=:event_id)
-        DataFrames.stack(Not([:event_id, :nasc]),
+        leftjoin(category_nasc, on=:haul_id)
+        DataFrames.stack(Not([:haul_id, :nasc]),
             variable_name=:category, value_name=:p_nasc)
-        leftjoin(category_sigma, on=[:event_id, :category])
-        dropmissing()
-        DataFramesMeta.@transform(:n = :nasc .* :p_nasc ./ (4π .* :sigma_bs))
+        leftjoin(category_sigma, on=[:haul_id, :category])
+        leftjoin(category_weight, on=[:haul_id, :category])
+        # dropmissing()
+        DataFramesMeta.@transform(:n = :nasc .* :p_nasc ./ (4π*:sigma_bs) * surveydata.dA)
+        DataFramesMeta.@transform(:biomass = :n .* :weight )
         @by(:category,
             :n = sum(skipmissing(:n)) * surveydata.dA)
         DataFramesMeta.@transform(

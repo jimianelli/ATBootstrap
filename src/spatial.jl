@@ -203,7 +203,7 @@ function trawl_assignments(pixel_coords, trawl_coords, stochastic=true;
     kdtree = KDTree(trawl_coords)
     #=
     idx and dists are vectors the same length as the number of pixels/acoustic cells.
-    Each element of idx and dists is a vector the same length as the number of trawls.
+    Each element of idx and dists is a vector with `nneighbors` elements.
     The ith element of idx is a vector of indices to each of the trawl locations.
     The ith element of dists is a vector of distances to the trawls indexed by idx.
     This means that the jth element of dists[i] is the distance from pixel i to trawl j.

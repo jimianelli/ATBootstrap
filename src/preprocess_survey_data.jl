@@ -129,26 +129,31 @@ function get_survey_grid(acoustics; method=TransectRibbons(), dx=10.0, dy=dx, or
     return grid, domain
 end
 
+function make_haul_id(prefix, ship, event_id)
+    return prefix .* "-".* string.(ship) .* "-" .* string.(event_id)
+end
 
 """
 Merge MACE's "macebase2.scaling_key_source_data" table with GAP's "racebase.specimen"
 table to make a combined virtual SKSD table. This assigns all specimens from the GAP 
 trawls to a new scaling stratum called "BT", which is applied to the bottom 3 m of the 
-water column. GAP haul numbers are multiplied by -1 to make them unique from the MACE 
-event_id's.
+water column.
 """
 function merge_scaling(scaling_mace, scaling_gap)
     ts_key = @by(scaling_mace, :species_code, :ts_relationship=first(:ts_relationship))
     
-    scaling_mace1 = @select(scaling_mace, :survey, :ship, :event_id, :class, :species_code, 
-        :primary_length, :ts_length, :ts_relationship, :catch_sampling_expansion,
-        :user_defined_expansion, :sample_correction_scalar, :haul_weight, :w)
+    scaling_mace1 = @chain scaling_mace begin
+        DataFramesMeta.@transform(:haul_id = make_haul_id("MACE", 1, :event_id))
+        @select(:survey, :ship, :haul_id, :class, :species_code, 
+            :primary_length, :ts_length, :ts_relationship, :catch_sampling_expansion,
+            :user_defined_expansion, :sample_correction_scalar, :haul_weight, :w)
+    end
 
     scaling_gap1 = @chain scaling_gap begin
         DataFramesMeta.@transform(
             :survey = :cruise,
             :ship = :vessel,
-            :event_id = -:haul,
+            :haul_id = make_haul_id("GAP", :vessel, :haul),
             :class = "BT",
             :primary_length = :length ./ 10,
             :ts_length = :length ./ 10, # not exactly right
@@ -158,12 +163,11 @@ function merge_scaling(scaling_mace, scaling_gap)
             :haul_weight = 1.0,
             :w = 1.0
         )
-        # leftjoin(nearbottom_coefs, on=:species_code)
         leftjoin(ts_key, on=:species_code)
         DataFramesMeta.@transform(
             :ts_relationship = replace(:ts_relationship, missing => "generic_swimbladder_fish")
         )
-        @select(:survey, :ship, :event_id, :class, :species_code,
+        @select(:survey, :ship, :haul_id, :class, :species_code,
             :primary_length, :ts_length, :ts_relationship, :catch_sampling_expansion,
             :user_defined_expansion, :sample_correction_scalar, :haul_weight, :w)
         dropmissing()
@@ -175,7 +179,16 @@ end
 function merge_trawl_locations(trawl_locations_mace, trawl_locations_gap)
     survey = only(unique(trawl_locations_mace.survey))
     trawl_locations_gap.survey .= survey
-    return [trawl_locations_mace; trawl_locations_gap]
+    tl_mace = @chain trawl_locations_mace begin
+        DataFramesMeta.@transform(:haul_id = make_haul_id("MACE", 1, :event_id))
+        @select(:survey, :haul_id, :latitude, :longitude)
+    end
+    tl_gap = @chain trawl_locations_gap begin
+        DataFramesMeta.@transform(:haul_id = make_haul_id("GAP", :vessel, :event_id))
+        @select(:survey, :haul_id, :latitude, :longitude)
+    end
+
+    return [tl_mace; tl_gap]
 end
 
 """
