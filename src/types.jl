@@ -19,7 +19,7 @@ struct ATSurveyData
 end
 
 """
-    BootSpecs([; selectivity, predict_ts, resample_scaling, drop_trawl, age_length,
+    BootSpecs([; selectivity, predict_ts, resample_scaling, nearbottom_coefs, age_length,
         weights_at_age, trawl_assignments, simulate_nasc, calibration])
     
 Construct a `BootSpecs` object, which specifies which error sources to include when running
