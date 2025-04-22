@@ -93,7 +93,7 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     
     ii = trawl_assignments(surveygrid_coords, 
                 svector_coords.(domain(geotrawls)), bs.trawl_assignments)
-
+    
     nasc = bs.simulate_nasc ? simulate_nasc(scp) : nonneg_lumult(scp.params, z0)
     cal_error_sim = simulate_cal_error(scp.cal_error,  bs.calibration)
     nasc_df = DataFrame(
@@ -113,7 +113,7 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
                 :sigma_bs : to_linear(predict_ts(:ts_relationship, :ts_length, false))
         )
         # remove nearbottom intercept from nasc (from Nate's paper)
-        # nasc_df.nasc .-= nearbottom_intercept
+        nasc_df.nasc .-= nearbottom_intercept
         nasc_df.nasc .= max.(nasc_df.nasc, 0) # make sure we don't end up with negative backscatter
     end
 
@@ -134,17 +134,18 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
         DataFramesMeta.@transform(:n = :nasc .* :p_nasc ./ (4π*:sigma_bs) * surveydata.dA)
         DataFramesMeta.@transform(:biomass = :n .* :weight )
         @by(:category,
-            :n = sum(skipmissing(:n)) * surveydata.dA)
+            :n = sum(skipmissing(:n)),
+            :biomass = sum(skipmissing(:biomass))
+        )
         DataFramesMeta.@transform(
             :species_code = parse.(Int, first.(split.(:category, "@"))),
             :age = parse.(Int, last.(split.(:category, "@")))
         )
-        leftjoin(age_weights, on=[:species_code, :age])
         DataFramesMeta.@transform(
-            :biomass = :n .* :weight, 
-            :i = i
+            :i = i,
+            :class = scp.class
         )
-        @select(:i, :species_code, :age, :category, :n, :biomass)
+        @select(:class, :i, :species_code, :age, :category, :n, :biomass)
         @orderby(:i, :species_code, :age, :n, :biomass)
     end
     return df
@@ -171,7 +172,9 @@ function simulate_class(scp::ScalingClassProblem, surveydata::ATSurveyData; nrep
         simulate_class_iteration(scp, surveydata, bs, i, scaling_sub, surveygrid_coords, z0)
     end
 
-    return vcat(results...)
+    class_results = vcat(results...)
+    class_results.class .= scp.class 
+    return class_results
 end
 
 """

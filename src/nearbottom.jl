@@ -30,22 +30,24 @@ nearbottom_coefs = leftjoin(species, nearbottom_coefs, on=:nearbottom_group)
 function make_nearbottom_dict(stochastic=true)
     if stochastic
         dists = truncated.(Normal.(nearbottom_coefs.A, nearbottom_coefs.sd_A),
-            0, Inf)
+            # 0, Inf)
+        nearbottom_coefs.lower, nearbottom_coefs.upper)
         aa = rand.(dists)
     else 
         aa = nearbottom_coefs.A
     end
     aa = aa ./ exp10.(-nearbottom_coefs.b/10) / 1852^2 / 4π
-    # aa = ones(5)
     return Dict(zip(nearbottom_coefs.species_code, aa)) 
 end
 
 function apply_nearbottom_coefficient!(scaling, nearbottom_dict)
-    for (i, r) in enumerate(eachrow(scaling))
-        # if species code isn't in dict, it's speckled eelpout (i.e.,"Misc")
-        code = r.species_code in keys(nearbottom_dict) ? r.species_code : 24166
-        scaling.user_defined_expansion[i] = nearbottom_dict[code]
-        scaling.w[i] = r.catch_sampling_expansion * r.user_defined_expansion *
-            r.sample_correction_scalar * r.haul_weight
+    @eachrow! scaling begin
+        if :species_code in keys(nearbottom_dict)
+            :user_defined_expansion = nearbottom_dict[:species_code] 
+        else
+            # if species code isn't in dict, it's speckled eelpout (i.e.,"Misc")
+            :user_defined_expansion = nearbottom_dict[24166]
+        end
+        :w = :catch_sampling_expansion * :user_defined_expansion * :sample_correction_scalar * :haul_weight
     end
 end
