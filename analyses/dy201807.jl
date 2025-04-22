@@ -26,11 +26,12 @@ acoustics = @subset(acoustics,
     markersize=:nasc/200, markerstrokewidth=0, alpha=0.5)
 @df trawl_locations scatter!(:x, :y, label="")
 
+i_bt = contains.(trawl_locations.haul_id, "GAP")
 p_xsects = @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/200,
     alpha=0.5, title="(a)", titlealign=:left)
-p_trawls = @df @subset(trawl_locations, :event_id .< 0) scatter(:x, :y, label="Bottom",
+p_trawls = @df trawl_locations[i_bt, :] scatter(:x, :y, label="Bottom",
     markersize=2, title="(b)", titlealign=:left)
-@df @subset(trawl_locations, :event_id .> 0) scatter!(p_trawls, :x, :y, label="Midwater",
+@df trawl_locations[.! i_bt, :] scatter!(p_trawls, :x, :y, label="Midwater",
     markersize=3)
 plot(p_xsects, p_trawls, xlabel="Easting (km)", ylabel="Northing (km)", aspect_ratio=:equal,
     markerstrokewidth=0, xlims=(-250, 800), size=(700, 400), dpi=300)
@@ -72,7 +73,7 @@ savefig(joinpath(@__DIR__, "plots", "conditional_nasc_stats_$(survey).png"))
 #=
 Plotting example trawl assignments
 =#
-tl1 = georef(@subset(trawl_locations, :event_id .> 1), (:x, :y))
+tl1 = georef(trawl_locations[.! i_bt, :], (:x, :y))
 sim_coords = ATB.svector_coords.(cp1.geosetup.domain)
 trawl_coords = ATB.svector_coords.(domain(tl1))
 trawl_assignments_det = ATB.trawl_assignments(sim_coords, trawl_coords, false)
