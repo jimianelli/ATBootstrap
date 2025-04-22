@@ -1,4 +1,5 @@
 using CSV, DataFrames, DataFramesMeta, CategoricalArrays
+using DataFramesMeta: @transform
 using Statistics, StatsBase
 using GLM
 using StatsPlots, StatsPlots.PlotMeasures
@@ -22,7 +23,7 @@ results = map(ebs_result_files) do f
     survey = basename(f)[9:14]
     println(survey)
     df = @chain CSV.read(f, DataFrame) begin
-        @transform(:survey = survey,
+        DataFramesMeta.@transform(:survey = survey,
                    :year = parse.(Int, first.(survey, 4)))
         @subset(:age .> 0)
         stack([:n, :biomass]) 
@@ -42,8 +43,8 @@ unstack(year_age, :age, :year, :cv)
 # EVA-estimated CVs from cruise reports
 eva = DataFrame(
     year = [2007, 2008, 2009, 2010, 2012, 2014, 2016, 2018, 2022, 2024],
-    # cv_1d =   round.([.045, .076, .088, .060, .042, .046, .021, .044, .068] * 100, digits=1)
     cv_1d =   [3.8, 5.6, 6.9, 5.4, 3.4, 3.4, 1.9, 3.9, 6.8, 5.6],
+    n = [10.04, 5.24, 8.63, 12.97, 7.49, 19.51, 12.22, 5.57, 9.67, 11.55],
     biomass = [2.28, 1.404, 1.331, 2.636, 2.279, 4.743, 4.838, 2.497, 3.834, 2.871]
 )
 
@@ -104,7 +105,8 @@ p_b = @df @subset(annual, :variable .== "biomass") plot(:year, :value,
     series_annotation=text.(:cvstring, :left, :bottom, 9),
     xticks=2007:2024, xlims=(2006.5, 2026), ylims=(0, 6),
     xlabel="Year", ylabel="Biomass (MT)")
-# plot!(p_b, eva.year, eva.biomass, linestyle=:dash, label="Survey report")
+plot!(p_n, eva.year, eva.n, linestyle=:dash, color=1, label="Survey report")
+plot!(p_b, eva.year, eva.biomass, linestyle=:dash, color=2, label="Survey report")
 plot(p_n, p_b, layout=(2, 1), size=(800, 600), margin=20px, dpi=300)
 savefig(joinpath(@__DIR__, "plots", "timeseries.png"))
 
@@ -238,7 +240,7 @@ summary_boot = @chain stds_boot begin
         # levels=["Calibration", "Spatial sampling", "Trawl jackknife", "Trawl assignment", 
         # "Selectivity", "Resample catches", "Length-weight", "TS models", "Age-length", "All"])
         levels=["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
-        "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"])
+        "Nearbottom coefs", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"])
     )
     @orderby(:year)
 end
@@ -255,7 +257,7 @@ end
 error_series = DataFramesMeta.@transform(error_series, 
     :error_label = CategoricalArray(:error_label, 
         levels=["Calibration", "Spatial sampling", "Selectivity", "Resample catches", 
-        "Trawl dropping", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"])
+        "Nearbottom coefs", "Trawl assignment", "TS models", "Age-length", "Length-weight", "All"])
 )
 
 pe1 = @df @subset(error_series, :variable.=="Abundance") plot(:year, :cv, group=:error_label,
