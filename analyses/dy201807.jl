@@ -1,7 +1,9 @@
 using CSV, DataFrames, DataFramesMeta
 using Statistics, StatsBase
 using StableRNGs
-using StatsPlots, StatsPlots.PlotMeasures
+using StatsPlots, StatsPlots.PlotMeasures, ColorSchemes
+import GLMakie, GeoMakie
+using GADM
 
 include(joinpath(@__DIR__, "..", "src", "ATBootstrap.jl"))
 import .ATBootstrap as ATB
@@ -27,15 +29,62 @@ acoustics = @subset(acoustics,
 @df trawl_locations scatter!(:x, :y, label="")
 
 i_bt = contains.(trawl_locations.haul_id, "GAP")
-p_xsects = @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/200,
-    alpha=0.5, title="(a)", titlealign=:left)
-p_trawls = @df trawl_locations[i_bt, :] scatter(:x, :y, label="Bottom",
-    markersize=2, title="(b)", titlealign=:left)
-@df trawl_locations[.! i_bt, :] scatter!(p_trawls, :x, :y, label="Midwater",
-    markersize=3)
-plot(p_xsects, p_trawls, xlabel="Easting (km)", ylabel="Northing (km)", aspect_ratio=:equal,
-    markerstrokewidth=0, xlims=(-250, 800), size=(700, 400), dpi=300)
-savefig(joinpath(@__DIR__, "plots", "DY201807_maps.png"))
+
+geodf = [
+    DataFrame(GADM.get("USA", "Alaska"));
+    DataFrame(GADM.get("RUS", "Chukot"))
+]
+
+fig = GLMakie.Figure()
+ga1 = GeoMakie.GeoAxis(fig[1,1], 
+    dest="+proj=ortho +lon_0=-170 +lat_0=57",
+    # dest = "+proj=utm +zone=3",
+    xgridcolor=(:black, 0.25), ygridcolor=(:black, 0.25),
+    xlabel = "Longitude", ylabel="Latitude", title="(a)", titlealign=:left,
+)
+ga2 = GeoMakie.GeoAxis(fig[1,2], 
+    dest="+proj=ortho +lon_0=-170 +lat_0=57",
+    # dest = "+proj=utm +zone=3",
+    xgridcolor=(:black, 0.25), ygridcolor=(:black, 0.25), yaxisposition=:right,
+    xlabel = "Longitude", ylabel="Latitude", title="(b)", titlealign=:left,
+)
+GLMakie.poly!(ga1, geodf.geom, color=:grey)
+GLMakie.poly!(ga2, geodf.geom, color=:grey)
+colors = [:dodgerblue, :darkorange]
+for (i, gdf) in enumerate(groupby(acoustics, :class))
+    GLMakie.scatter!(ga1, gdf.lon, gdf.lat, label=first(gdf.class),
+        markersize=gdf.nasc/200 .+ 1, alpha=0.5, color=colors[i])
+end
+GLMakie.scatter!(ga2, trawl_locations[i_bt,:].longitude, trawl_locations[i_bt, :].latitude,
+    markersize=3, color=colors[1], label="Bottom")
+GLMakie.scatter!(ga2, trawl_locations[.!i_bt,:].longitude, trawl_locations[.!i_bt, :].latitude,
+    markersize=5, color=colors[2], label="Midwater")
+
+for ax in [ga1, ga2]
+    GLMakie.xlims!(ax, -181, -158)
+    GLMakie.ylims!(ax, 53, 63)
+    ax.xticks = -185:5:-150
+    ax.titlefont = :regular
+    # ax.yticks = 50:5:65
+end
+elem_1 = GLMakie.MarkerElement(color=colors[1], marker=:circle)
+elem_2 = GLMakie.MarkerElement(color=colors[2], marker=:circle)
+GLMakie.Legend(fig[1,3], 
+    [elem_1, elem_2],
+    ["Bottom", "Midwater"]
+)
+GLMakie.save(joinpath(@__DIR__, "plots", "DY201807_maps.png"), fig,
+    size=(700, 300), px_per_unit=4)
+
+# p_xsects = @df acoustics scatter(:x, :y, group=:class, markersize=:nasc/200,
+#     alpha=0.5, title="(a)", titlealign=:left)
+# p_trawls = @df trawl_locations[i_bt, :] scatter(:x, :y, label="Bottom",
+#     markersize=2, title="(b)", titlealign=:left)
+# @df trawl_locations[.! i_bt, :] scatter!(p_trawls, :x, :y, label="Midwater",
+#     markersize=3)
+# plot(p_xsects, p_trawls, xlabel="Easting (km)", ylabel="Northing (km)", aspect_ratio=:equal,
+#     markerstrokewidth=0, xlims=(-250, 800), size=(700, 400), dpi=300)
+# savefig(joinpath(@__DIR__, "plots", "DY201807_maps.png"))
 
 surveydata = ATB.ATSurveyData(acoustics, scaling, age_length, length_weight, trawl_locations, 
     surveygrid, dA)
@@ -51,20 +100,38 @@ CSV.write(joinpath(@__DIR__, "results", "zdists_$(survey).csv"),
 Plotting example conditional simulations
 =#
 using GeoStats
-cp1 = first(atbp.class_problems)
+cp1 = atbp.class_problems[2]
 sim_domain = ATB.solution_domain(cp1)
 
 scatter(sim_domain.x, sim_domain.y, markersize=2)
 scatter!(acoustics.x, acoustics.y, markersize=2)
 
-nasc_plots = map(1:6) do _ 
+clims=(0, 2000)
+cscheme = :matter
+p_xsects = @df @subset(acoustics, :class.=="PK1") scatter(:x, :y,
+    markersize=:nasc/300 .+ 1, markerstrokewidth=0, label="",
+    zcolor=:nasc, clims=clims, legend=false, color=cscheme,
+    title="(a)", titlealign=:left, ylabel="Northing (km)")
+
+titles = "(" .* ('b':'f') .* ")"
+nasc_plots = map(1:5) do i
     nasc = ATB.simulate_nasc(cp1)
-    scatter(sim_domain.x, sim_domain.y, zcolor=nasc, markershape=:square,
+    p = scatter(sim_domain.x, sim_domain.y, zcolor=nasc, markershape=:square,
         markerstrokewidth=0, markersize=1.7, legend=false, aspect_ratio=:equal,
-        clim=(0, 1500),
-        xlabel="Easting (km)", ylabel="Northing (km)")
+        color=cscheme,
+        clim=clims, xlabel="", ylabel="", title=titles[i], titlealign=:left)
+    if i == 3
+        ylabel!(p, "Northing (km)")
+    end
+    if 3 .<= i .<= 5
+        xlabel!(p, "Easting (km)")
+    end
+    p
 end
-plot(nasc_plots..., layout=(2, 3), size=(1200, 800), margin=15px)
+h2 = scatter([0,0], [0,0], zcolor=[clims...], clims=clims, color=cscheme,
+    xlims=(1,1.1), label="", colorbar_title="NASC (m² nmi⁻²)", framestyle=:none)
+l = @layout [grid(2, 3) a{0.01w}]
+plot([p_xsects; nasc_plots; h2]..., layout=l, link=:all, size=(1200, 800), margin=15px)
 savefig(joinpath(@__DIR__, "plots", "conditional_nasc.png"))
 
 ATB.plot_geosim_stats(atbp, surveydata, 500)
@@ -79,7 +146,7 @@ trawl_coords = ATB.svector_coords.(domain(tl1))
 trawl_assignments_det = ATB.trawl_assignments(sim_coords, trawl_coords, false)
 trawl_assignments_rand= ATB.trawl_assignments(sim_coords, trawl_coords, true)
 
-ms = 1.8
+ms = 1.63
 pal = :Set1_9
 p1 = scatter(first.(sim_coords), last.(sim_coords), color=trawl_assignments_det,
     markershape=:square, markerstrokewidth=0, markersize=ms, legend=false, palette=pal,
@@ -94,7 +161,7 @@ plot(p1, p2, xlabel="Easting (km)", ylabel="Northing (km)", aspect_ratio=:equal,
     bottom_margin=15px)
 savefig(joinpath(@__DIR__, "plots", "trawl_assignments.png"))
 
-# Inspect the variograms to make sure they look ok
+# Inspect the vari3333ograms to make sure they look ok
 ATB.plot_class_variograms(atbp, legend=:bottomright)
 
 # Check out a couple of conditional simulations
