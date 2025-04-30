@@ -87,8 +87,6 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
         georef((:x, :y))
     end
 
-    all_ages = make_all_ages(scaling_boot, scp.age_max)
-    
     ii = trawl_assignments(surveygrid_coords, 
                 svector_coords.(domain(geotrawls)), bs.trawl_assignments)
     

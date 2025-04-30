@@ -41,13 +41,6 @@ function get_trawl_category_means(scaling, aged_species, predict_weight)
     return trawl_means_cat
 end
 
-function make_all_ages(scaling, age_max)
-    return allcombinations(DataFrame, 
-        haul_id = unique(scaling.haul_id), 
-        age = 0:age_max)
-end
-
-
 function _category(use_ages, species_code, age)
     if use_ages(species_code)
         return string.(species_code) .* "@" .* string.(age)
