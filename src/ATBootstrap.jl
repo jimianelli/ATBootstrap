@@ -88,8 +88,6 @@ function simulate_class_iteration(scp::ScalingClassProblem, surveydata::ATSurvey
     end
 
     all_ages = make_all_ages(scaling_boot, scp.age_max)
-    age_weights = pollock_weights_at_age(scaling_boot, surveydata.length_weight,
-        all_ages, bs.weights_at_age)
     
     ii = trawl_assignments(surveygrid_coords, 
                 svector_coords.(domain(geotrawls)), bs.trawl_assignments)

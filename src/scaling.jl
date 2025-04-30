@@ -30,9 +30,9 @@ function get_trawl_category_means(scaling, aged_species, predict_weight)
         =# 
         @subset(:w .> 0)
         @by([:haul_id, :category], 
-            :sigma_bs = mean(:sigma_bs, Weights(:w)),
+            :sigma_bs = mean(:sigma_bs),#, Weights(:w)),
             :p_nasc = sum(:p_nasc),
-            :weight = mean(:weight, Weights(:w)),
+            :weight = mean(:weight)#, Weights(:w)),
         )
         # make proportions sum to 1.0 for each haul
         DataFrames.groupby(:haul_id)
@@ -47,24 +47,6 @@ function make_all_ages(scaling, age_max)
         age = 0:age_max)
 end
 
-function pollock_weights_at_age(scaling, length_weight, all_ages, stochastic=false)
-    length_weight_pollock = @subset(length_weight, :species_code .== 21740)
-    predict_weight = make_weight_function(length_weight_pollock, stochastic)
-    res = @chain scaling begin
-        @subset(:species_code .== 21740) # only calculate for pollock
-        DataFramesMeta.@transform(
-            :weight = predict_weight.(:primary_length)
-        )
-        rightjoin(all_ages, on=[:haul_id, :age])
-        DataFramesMeta.@transform(
-            :weight = replace(:weight, missing => 0.0),
-            :w = replace(:w, missing => 0)
-        )
-        @by(:age, :weight = mean(:weight, Weights(:w)))
-        DataFramesMeta.@transform(:species_code = 21740)
-    end
-    return res
-end
 
 function _category(use_ages, species_code, age)
     if use_ages(species_code)
