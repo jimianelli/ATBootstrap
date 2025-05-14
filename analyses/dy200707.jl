@@ -41,6 +41,9 @@ ATB.plot_class_variograms(atbp, legend=:bottomright)
 # Check out a couple of conditional simulations
 ATB.plot_simulated_nasc(atbp, surveydata, size=(1000, 600), markersize=1.3)
 
+@by(acoustics, :class, :max = first(sort(:nasc, rev=true), 2))
+@by(acoustics, :class, :mean = mean(:nasc))
+
 # Do the bootstrap uncertainty analysis
 results = ATB.simulate(atbp, surveydata, nreplicates = 500)
 ATB.plot_boot_results(results)
