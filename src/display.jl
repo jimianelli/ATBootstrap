@@ -87,24 +87,37 @@ function plot_geosim_stats(atbp, surveydata, n=500)
         q_sims = [quantile(nasc, qq) for nasc in sim_nascs]
         ph = errorline(q_obs, hcat(q_sims...), errortype=:percentile, percentiles=[5, 95],
             marker=:o, markerstrokewidth=0, markersize=2, fillalpha=0.5,
-            xlabel="Observed", ylabel="Simulated", label="Average QQ", title=prob.class)
+            xlabel="Observed", ylabel="Simulated", label="Average QQ", 
+            title=prob.class, foreground_color_legend=nothing,
+            background_color_legend=nothing)
         plot!(ph, x -> x, 0, quantile(obs_nasc, 0.99), label="1:1")
         push!(hist_plots, ph)
 
-        pm = histogram(mean.(sim_nascs), normalize=true, linewidth=0, label="Simulated mean",
+        hist_means = normalize(fit(Histogram, mean.(sim_nascs), nbins=30))
+        dev_means = (mean(mean.(sim_nascs)) .- mean(obs_nasc)) / mean(obs_nasc)
+        pm = plot(hist_means, linewidth=0, label="Simulated mean",
             xlabel="Mean NASC (m² nmi²)", ylabel="Probability density")
-        vline!([mean(obs_nasc)], linewidth=3, label="Observed mean")
+        vline!(pm, [mean(obs_nasc)], linewidth=3, label="Observed mean")
+        plot!(pm, [first(hist_means.edges[1])], [0], alpha=0,
+            label="Avg. Δ: $(round(dev_means*100, digits=0))%",
+            foreground_color_legend=nothing, background_color_legend=nothing)
         push!(mean_plots, pm)
 
-        ps = histogram(std.(sim_nascs), normalize=true, linewidth=0, label="Simulated S.D.",
+        hist_stds = normalize(fit(Histogram, std.(sim_nascs), nbins=30))
+        dev_stds = (mean(std.(sim_nascs)) .- std(obs_nasc)) / std(obs_nasc)
+        ps = plot(hist_stds, linewidth=0, label="Simulated S.D.",
             xlabel="Std. dev. NASC (m² nmi²)", ylabel="Probability density")
-        vline!([std(obs_nasc)], linewidth=3, label="Observed S.D.")
+        vline!(ps, [std(obs_nasc)], linewidth=3, label="Observed S.D.")
+        plot!(ps, [first(hist_means.edges[1])], [0], alpha=0,
+            label="Avg. Δ: $(round(dev_means*100, digits=0))%",
+            foreground_color_legend=nothing, background_color_legend=nothing)
         push!(sd_plots, ps)
     end
     nclasses = length(atbp.class_problems)
     return plot(hist_plots..., mean_plots..., sd_plots..., margin=15px,
         layout=(3, length(atbp.class_problems)), size=(400*nclasses, 600))
 end
+
 """
 Make violin plots of pollock abundance- and biomass-at-age from the data frame `results`,
 the output of running `simulate`. Plotting options can be passed in as keyword arguments.
