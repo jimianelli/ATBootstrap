@@ -21,8 +21,9 @@ Returns a tuple with two elements:
 function define_conditional_sim(acoustics, sim_domain; maxlag=200.0, 
         nlags=10, weightfunc=h -> 1/h)
     geonasc = acoustics[!, [:nasc, :x, :y]]
-    geonasc.nasc .+= 1e-3 # add a small epsilon so no zeros
+    # add small epsilon to avoid occasional "duplicate coordinate" warnings
     geonasc.x .+= 1e-3 .* randn.()
+    geonasc.y .+= 1e-3 .* randn.()
     geonasc = georef(geonasc, (:x, :y))
     evg = EmpiricalVariogram(geonasc, :nasc, nlags=nlags, maxlag=maxlag)
     tvg = GeoStatsFunctions.fit(ExponentialVariogram, evg, weightfunc)
