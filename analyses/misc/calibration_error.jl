@@ -4,7 +4,7 @@ using MonteCarloMeasurements
 using StableRNGs
 using StatsPlots
 
-StableRNGs.seed!(1)
+StableRNGs.seed!(123)
 
 # Function to convert output of UnderwaterAcoustics.absorption to dB/m
 # See https://github.com/org-arl/UnderwaterAcoustics.jl/issues/54
@@ -43,7 +43,7 @@ S_assumed = 33.0
 ΔS = S_assumed .- S_true
 mean(ΔT), std(ΔT)
 mean(ΔS), std(ΔS)
-r_true = 100                                # True range to target/volume (m)
+r_true = 30                      # True range to target/volume (m)
 c_true = soundspeed(mean(T_true), mean(S_true), r_true) # True sound speed (m/s)
 T_est = T_assumed±std(ΔT)
 S_est = S_assumed±std(ΔS)
@@ -72,6 +72,7 @@ gains = 20log10(r_est) + 2α_est*r_est - 10log10((pt * λ_est^2 * g_linearity * 
 uncertainty = gains - mean(gains.particles)
 
 cal_sd = pstd(uncertainty)
+cal_sd * 2
 plot(uncertainty, normalize=true, label="", linewidth=0, foreground_color_legend=nothing,
     xlabel="Calibration error (dB)", ylabel="Probability density")
 vline!([-cal_sd, cal_sd], label="S.D. = $(round(cal_sd, sigdigits=2)) dB", color=:black)
