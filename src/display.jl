@@ -99,7 +99,7 @@ function plot_geosim_stats(atbp, surveydata, n=500)
             xlabel="Mean NASC (m² nmi²)", ylabel="Probability density")
         vline!(pm, [mean(obs_nasc)], linewidth=3, label="Observed mean")
         plot!(pm, [first(hist_means.edges[1])], [0], alpha=0,
-            label="Avg. Δ: $(round(dev_means*100, digits=0))%",
+            label="Avg. Δ: $(round(dev_means*100, digits=1))%",
             foreground_color_legend=nothing, background_color_legend=nothing)
         push!(mean_plots, pm)
 
@@ -109,7 +109,7 @@ function plot_geosim_stats(atbp, surveydata, n=500)
             xlabel="Std. dev. NASC (m² nmi²)", ylabel="Probability density")
         vline!(ps, [std(obs_nasc)], linewidth=3, label="Observed S.D.")
         plot!(ps, [first(hist_means.edges[1])], [0], alpha=0,
-            label="Avg. Δ: $(round(dev_means*100, digits=0))%",
+            label="Avg. Δ: $(round(dev_stds*100, digits=1))%",
             foreground_color_legend=nothing, background_color_legend=nothing)
         push!(sd_plots, ps)
     end
