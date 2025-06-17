@@ -107,7 +107,7 @@ p_n = @df @subset(annual, :variable .== "n") plot(:year, :value,
 p_b = @df @subset(annual, :variable .== "biomass") plot(:year, :value, 
     ribbon = (:value .- :lower, :upper .- :value), marker=:o, color=2, label="",
     series_annotation=text.(:cvstring, :left, :bottom, 9), ylims=(0, 6),
-    xlabel="Year", ylabel="Biomass (MT)")
+    xlabel="Year", ylabel="Biomass (Mt)")
 # plot!(p_n, eva.year, eva.n, linestyle=:dash, color=1, label="Survey report")
 # plot!(p_b, eva.year, eva.biomass, linestyle=:dash, color=2, label="Survey report")
 plot(p_n, p_b, layout=(2, 1), size=(800, 600), margin=20px, dpi=300,
@@ -160,8 +160,8 @@ CSV.write(joinpath(@__DIR__, "results", "age_classes_uncertainty.csv"), annual_a
 
 @by(annual_age, :variable, 
     :mean = mean(:cv),
-    :lower = quantile(:cv, 0.25),
-    :upper = quantile(:cv, 0.75))
+    :lower = quantile(:cv, 0.05),
+    :upper = quantile(:cv, 0.95))
 
 plots_n = map(unique(results.year)) do year
     df = @subset(results, :variable.=="n", :year .== year)
