@@ -1,4 +1,4 @@
 survey,class,zdist
 201006,BT,Distributions.LogNormal
-201006,PK1,Distributions.Gamma
-201006,PK2,Distributions.Gamma
+201006,PK1,Gamma
+201006,PK2,Gamma

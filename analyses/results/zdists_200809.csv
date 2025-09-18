@@ -1,4 +1,4 @@
 survey,class,zdist
 200809,BT,Distributions.LogNormal
-200809,PK1,Distributions.Gamma
-200809,PK3,Distributions.Gamma
+200809,PK1,Gamma
+200809,PK3,Gamma
