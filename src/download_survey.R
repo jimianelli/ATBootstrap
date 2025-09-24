@@ -123,7 +123,7 @@ download_trawl_locations_gap <- function(connection, survey) {
   trawl_locations_gap <- cleanup(trawl_locations_gap) %>%
     mutate(survey = cruise, event_id = haul,
       latitude = start_latitude, longitude=start_longitude) %>%
-    select(survey, event_id, latitude, longitude)
+    select(survey, vessel, event_id, latitude, longitude)
   return(trawl_locations_gap)
 }
 
