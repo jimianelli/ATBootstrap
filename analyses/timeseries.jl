@@ -208,13 +208,13 @@ savefig(joinpath(@__DIR__, "plots", "age_classes.png"))
 
 
 pn = @df @subset(annual_age, :variable .== "n") scatter(:age, :year, 
-    markersize=:upper/5e8, legend=false, title="(a)", titlealign=:left)
+    markersize=:upper/5e8, markerstrokewidth=0.2, legend=false, title="(a)", titlealign=:left)
 @df @subset(annual_age, :variable .== "n") scatter!(pn, :age, :year, 
-    markersize=:lower/5e8, color=:white)
-pb = @df @subset(annual_age, :variable .== "biomass") scatter(:age, 
-    :year, markersize=:upper/1e8, color=2, legend=false, title="(b)", titlealign=:left)
-@df @subset(annual_age, :variable .== "biomass") scatter!(pb, :age, :year, markersize=:lower/1e8,
-    color=:white)
+    markersize=:lower/5e8, markerstrokewidth=0.2, color=:white)
+pb = @df @subset(annual_age, :variable .== "biomass") scatter(:age, :year,
+    markersize=:upper/1e8, markerstrokewidth=0.2, color=2, legend=false, title="(b)", titlealign=:left)
+@df @subset(annual_age, :variable .== "biomass") scatter!(pb, :age, :year,
+    markersize=:lower/1e8, markerstrokewidth=0.2, color=:white)
 plot(pn, pb, size=(1000, 500), xticks=(1:10, [string.(1:9); "10+"] ),
     yticks=2008:2:2024, xlims=(0, 11), ylims=(2006, 2025), margin=15px,
     xlabel="Age class", ylabel="Year")
