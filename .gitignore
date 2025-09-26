@@ -19,3 +19,4 @@ docs/site/
 
 # Figures and output files
 *.png
+.Rproj.user
