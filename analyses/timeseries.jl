@@ -252,12 +252,15 @@ end
 stds_boot = map(1:1000) do i
     df = resample_df(errors)
     @by(df, [:year, :error_label, :variable],
+        :mean = mean(:value),
         :cv = std(:value) / mean(:value)
     )
 end 
 stds_boot = vcat(stds_boot...)
 summary_boot = @chain stds_boot begin
     @by([:year, :error_label, :variable],
+        :mean = mean(:mean),
+        :mean_se = std(:mean),
         :cv = mean(:cv),
         :cv_se = std(:cv)
     )
@@ -323,3 +326,14 @@ end
     outliers=false, permute=(:x, :y), xflip=true, legend=:right, yminorgrid=true,
     ylabel="CV (%)", size=(500, 400), dpi=300)
 savefig(joinpath(@__DIR__, "plots", "error_sources.png"))
+
+@df @orderby(error_series, :error_label) groupedboxplot(:error_label, :mean, group=:variable, 
+    outliers=false, permute=(:x, :y), xflip=true, legend=:outerright, yminorgrid=true,
+    ylabel="CV (%)", size=(800, 600), dpi=300)
+
+pe1 = @df @subset(error_series, :variable.=="Abundance") plot(:year, :mean, group=:error_label,
+    ylabel="Abundance (billions)", palette=:tableau_10)
+pe2 = @df @subset(error_series, :variable.=="Biomass") plot(:year, :mean, group=:error_label,
+    ylabel="Biomass (Mt)", palette=:tableau_10)
+plot(pe1, pe2, marker=:o, layout=(2,1), legend=:outerright,
+    linewidth=3, xticks=2008:2:2024, size=(800, 500), margin=20px)
