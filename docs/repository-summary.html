@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap Repository Summary</title>
+  <style>
+    :root {
+      --bg: #f5f2eb;
+      --panel: #fffdf9;
+      --ink: #1f2933;
+      --muted: #5e6a73;
+      --line: #ddd4c8;
+      --accent: #0f766e;
+      --accent-soft: #e3f3f0;
+      --warn: #8a5a00;
+      --warn-soft: #fff3d3;
+      --shadow: 0 16px 36px rgba(31, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 28%),
+        linear-gradient(180deg, #fbf8f3 0%, var(--bg) 100%);
+      line-height: 1.62;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 38px 24px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0f766e, #183e5c);
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 34px 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.8rem;
+      opacity: 0.84;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      line-height: 1.05;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 52rem;
+      color: rgba(248, 250, 252, 0.92);
+      font-size: 1.05rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    .meta span {
+      background: rgba(255, 255, 255, 0.12);
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 0.92rem;
+    }
+
+    .section {
+      margin-top: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px 26px;
+      box-shadow: var(--shadow);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.45rem;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul, ol {
+      margin: 0 0 12px 22px;
+      padding: 0;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .mini {
+      border-radius: 16px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      padding: 14px 16px;
+    }
+
+    .mini strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    .callout {
+      margin-top: 14px;
+      border-left: 6px solid var(--warn);
+      background: var(--warn-soft);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+
+    .callout strong {
+      color: #734b00;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: #f0ebe4;
+      padding: 0.12em 0.4em;
+      border-radius: 6px;
+    }
+
+    a {
+      color: #0f5f9c;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Repository Summary</p>
+      <h1>ATBootstrap on <code>codex/R-convert</code></h1>
+      <p>
+        This branch converts the R side into a usable non-spatial parity layer, freezes the existing
+        Julia outputs as regression targets, and makes the spatial simulator an explicit interface
+        instead of a placeholder.
+      </p>
+      <div class="meta">
+        <span>Repository: ATBootstrap</span>
+        <span>Branch: codex/R-convert</span>
+        <span>Focus: R conversion plus golden references</span>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>Repository Shape</h2>
+      <p>
+        The repository is still centered on the Julia implementation in <code>src/</code> and the
+        survey-specific Julia drivers in <code>analyses/</code>. This branch does not replace the Julia
+        spatial simulator. It separates the repository into two clearer layers:
+      </p>
+      <div class="grid">
+        <div class="mini">
+          <strong>Portable layer</strong>
+          Preprocessing, survey-grid setup, TS/selectivity/age-length/weight helpers, summaries, and
+          non-spatial plotting are now available in R.
+        </div>
+        <div class="mini">
+          <strong>Unported layer</strong>
+          GeoStats-based conditional simulation and class-problem spatial setup remain external to the R port.
+        </div>
+        <div class="mini">
+          <strong>Regression layer</strong>
+          Existing Julia outputs are frozen under <code>tests/golden/analyses_results/</code>.
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>What This Branch Adds</h2>
+      <ul>
+        <li>
+          A consolidated R implementation in <code>R/funs.R</code> that replaces the prior duplicate,
+          partially placeholder code paths.
+        </li>
+        <li>
+          A compatibility entry point in <code>R/ATBootstrap.R</code> that simply sources the consolidated module.
+        </li>
+        <li>
+          A frozen copy of the current Julia result CSVs in <code>tests/golden/analyses_results/</code>,
+          plus a checksum manifest.
+        </li>
+        <li>
+          A golden-reference verification script and a non-spatial smoke test.
+        </li>
+        <li>
+          This <code>docs/</code> Pages surface so the branch can present a browser-friendly summary.
+        </li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Current R Boundary</h2>
+      <p>
+        The branch intentionally stops short of reimplementing the Julia spatial simulator. In the new R path:
+      </p>
+      <ul>
+        <li><code>preprocess_survey_data()</code> is real and writes the normalized survey files.</li>
+        <li><code>read_survey_files()</code>, resampling helpers, TS/selectivity/age-length/weight logic, and summaries are real.</li>
+        <li><code>simulate_class_iteration()</code> is real for the non-spatial parts and requires a supplied spatial simulator.</li>
+        <li><code>simulate_nasc()</code> now fails clearly unless a real simulator or the required spatial objects are attached.</li>
+      </ul>
+      <div class="callout">
+        <strong>Meaning:</strong> this branch is suitable for parity work around preprocessing and downstream
+        survey computations, but not yet for replacing the Julia geostatistical backend.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Validation Added Here</h2>
+      <ul>
+        <li>
+          <code>Rscript tests/check_golden_results.R</code> verifies that the current Julia outputs in
+          <code>analyses/results/</code> still match the frozen golden copies.
+        </li>
+        <li>
+          <code>Rscript tests/smoke_nonspatial_port.R</code> exercises the non-spatial R pipeline on a temporary
+          copy of one survey directory so tracked data files are not rewritten.
+        </li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Why This Matters for the Larger Migration</h2>
+      <p>
+        The immediate program risk is still disagreement in point estimates between the uncertainty workflow
+        and the standard survey outputs. That makes a clean separation of responsibilities more useful than a
+        direct RTMB rewrite.
+      </p>
+      <ol>
+        <li>Freeze the current Julia outputs.</li>
+        <li>Get the non-spatial R and survey-processing path into a maintainable state.</li>
+        <li>Use that to reconcile point-estimate differences against Macebase Analysis.</li>
+        <li>Only then decide whether the spatial layer should stay in Julia, move to R, or be redesigned.</li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>Related Pages</h2>
+      <ul>
+        <li><a href="./index.html">Landing page</a></li>
+        <li><a href="./rtmb-migration-evaluation.html">RTMB migration evaluation</a></li>
+        <li><a href="https://github.com/jimianelli/ATBootstrap">GitHub repository</a></li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

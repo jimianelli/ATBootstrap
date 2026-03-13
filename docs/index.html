@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap Branch Summary</title>
+  <style>
+    :root {
+      --bg: #f4f0e8;
+      --panel: #fffdf9;
+      --ink: #1e2933;
+      --muted: #5b6770;
+      --line: #ddd4c7;
+      --accent: #0b6b69;
+      --accent-soft: #e4f4f2;
+      --shadow: 0 18px 40px rgba(30, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(11, 107, 105, 0.10), transparent 28%),
+        linear-gradient(180deg, #faf7f1 0%, var(--bg) 100%);
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 1020px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #114d5d, #0b6b69);
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 34px 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.8rem;
+      opacity: 0.84;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1.05;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 48rem;
+      font-size: 1.04rem;
+      color: rgba(248, 250, 252, 0.92);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 18px;
+      margin-top: 24px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 22px 22px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h2 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+      line-height: 1.2;
+    }
+
+    .card p {
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+
+    .links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    a.button {
+      display: inline-block;
+      text-decoration: none;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid rgba(11, 107, 105, 0.18);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 0.95rem;
+    }
+
+    .note {
+      margin-top: 24px;
+      background: #fff7df;
+      border-left: 6px solid #b7791f;
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+
+    .note strong {
+      color: #7a4f05;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: #f1ece4;
+      padding: 0.12em 0.4em;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">GitHub Pages Surface</p>
+      <h1>ATBootstrap Branch Summary</h1>
+      <p>
+        This branch adds a lightweight Pages entry point for the R-convert work, with a standalone
+        repository summary and links to the current migration evaluation.
+      </p>
+    </header>
+
+    <section class="cards">
+      <article class="card">
+        <h2>Repository Summary</h2>
+        <p>
+          Current branch summary covering repository structure, the non-spatial R port boundary,
+          golden-reference outputs, and next integration steps.
+        </p>
+        <div class="links">
+          <a class="button" href="./repository-summary.html">Open Summary</a>
+          <a class="button" href="https://jimianelli.github.io/ATBootstrap/repository-summary.html">Published URL</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>RTMB Evaluation</h2>
+        <p>
+          Standalone HTML assessment of the Julia-to-RTMB question, updated around the Macebase Analysis
+          integration path and point-estimate reconciliation problem.
+        </p>
+        <div class="links">
+          <a class="button" href="./rtmb-migration-evaluation.html">Open Evaluation</a>
+          <a class="button" href="https://jimianelli.github.io/ATBootstrap/rtmb-migration-evaluation.html">Published URL</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Repository</h2>
+        <p>
+          Source repository for this branch. Useful when the Pages view should link back to code,
+          issue tracking, or branch history.
+        </p>
+        <div class="links">
+          <a class="button" href="https://github.com/jimianelli/ATBootstrap">GitHub Repo</a>
+          <a class="button" href="https://jimianelli.github.io/ATBootstrap/">Project Pages Root</a>
+        </div>
+      </article>
+    </section>
+
+    <div class="note">
+      <strong>Publishing note:</strong> these links assume GitHub Pages will serve the repository as a
+      project site at <code>https://jimianelli.github.io/ATBootstrap/</code>. If Pages is not already
+      configured, point the repository Pages source at the <code>docs/</code> directory for this branch
+      or merge the branch to the branch that is currently published.
+    </div>
+  </div>
+</body>
+</html>

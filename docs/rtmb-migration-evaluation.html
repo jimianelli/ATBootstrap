@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap RTMB Migration Evaluation</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --panel: #fffdf8;
+      --ink: #1f2933;
+      --muted: #5b6670;
+      --accent: #0f766e;
+      --accent-soft: #d9f0ed;
+      --warn: #8a5a00;
+      --warn-soft: #fff2cc;
+      --border: #d7d0c2;
+      --code-bg: #f2eee6;
+      --shadow: 0 18px 40px rgba(31, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(138, 90, 0, 0.10), transparent 24%),
+        linear-gradient(180deg, #f8f5ee 0%, var(--bg) 100%);
+      color: var(--ink);
+      line-height: 1.6;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(15, 118, 110, 0.95), rgba(24, 62, 92, 0.92));
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      opacity: 0.85;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      line-height: 1.05;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 52rem;
+      font-size: 1.08rem;
+      color: rgba(248, 250, 252, 0.9);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+      font-size: 0.92rem;
+      color: rgba(248, 250, 252, 0.82);
+    }
+
+    .meta span {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      gap: 24px;
+      margin-top: 24px;
+    }
+
+    .toc,
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .toc {
+      padding: 22px 20px;
+      position: sticky;
+      top: 20px;
+      align-self: start;
+    }
+
+    .toc h2 {
+      margin: 0 0 12px;
+      font-size: 1rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .toc ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .toc li + li {
+      margin-top: 8px;
+    }
+
+    .toc a {
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .toc a:hover {
+      color: var(--accent);
+    }
+
+    .content {
+      display: grid;
+      gap: 20px;
+    }
+
+    .card {
+      padding: 26px 28px;
+    }
+
+    h2 {
+      margin: 0 0 16px;
+      font-size: 1.55rem;
+      line-height: 1.2;
+    }
+
+    h3 {
+      margin: 20px 0 10px;
+      font-size: 1.1rem;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul,
+    ol {
+      margin: 0 0 12px 22px;
+      padding: 0;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .summary .pill {
+      background: var(--accent-soft);
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      border-radius: 16px;
+      padding: 14px 16px;
+    }
+
+    .summary .pill strong {
+      display: block;
+      font-size: 1.15rem;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    .callout {
+      border-left: 6px solid var(--warn);
+      background: var(--warn-soft);
+      padding: 16px 18px;
+      border-radius: 14px;
+      margin: 16px 0;
+    }
+
+    .callout strong {
+      color: #6d4700;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+
+    th,
+    td {
+      border-top: 1px solid var(--border);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .footer {
+      margin-top: 18px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 860px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .toc {
+        position: static;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Repository Evaluation</p>
+      <h1>ATBootstrap RTMB Migration Evaluation</h1>
+      <p class="subtitle">
+        Assessment of this repository with a specific goal of understanding whether the Julia
+        components should be converted into RTMB, and where a direct port ends versus a model redesign begins.
+      </p>
+      <div class="meta">
+        <span>Date: March 13, 2026</span>
+        <span>Repository: ATBootstrap</span>
+        <span>Format: Standalone HTML</span>
+        <span><a href="./repository-summary.html" style="color: #f8fafc;">Repository Summary</a></span>
+      </div>
+    </header>
+
+    <div class="layout">
+      <nav class="toc" aria-label="Table of contents">
+        <h2>Contents</h2>
+        <ul>
+          <li><a href="#bottom-line">Bottom Line</a></li>
+          <li><a href="#program-context">Program Context</a></li>
+          <li><a href="#current-architecture">Current Architecture</a></li>
+          <li><a href="#why-rtmb-is-not-a-direct-port">Why RTMB Is Not a Direct Port</a></li>
+          <li><a href="#point-estimate-problem">Point Estimate Disagreement</a></li>
+          <li><a href="#what-is-portable">What Is Portable</a></li>
+          <li><a href="#what-requires-redesign">What Requires Redesign</a></li>
+          <li><a href="#recommended-path">Recommended Path</a></li>
+          <li><a href="#evidence">Evidence</a></li>
+        </ul>
+      </nav>
+
+      <main class="content">
+        <section id="bottom-line" class="card">
+          <h2>Bottom Line</h2>
+          <p>
+            With the added program context, the strongest recommendation is not “convert Julia to RTMB.”
+            It is “use this repository to understand and isolate the uncertainty logic, then move survey-result
+            computation into Macebase Analysis so the organization maintains one code base.”
+          </p>
+          <p>
+            The Julia core is still a stochastic bootstrap engine rather than a differentiable likelihood
+            model, so the technical RTMB conclusion does not change. What does change is the practical
+            recommendation: the first-order problem is point-estimate disagreement with standard survey
+            results, not lack of an RTMB implementation.
+          </p>
+          <div class="summary">
+            <div class="pill">
+              <strong>Primary goal</strong>
+              Reconcile point estimates with standard survey outputs.
+            </div>
+            <div class="pill">
+              <strong>Preferred endpoint</strong>
+              One maintained code base centered on Macebase Analysis.
+            </div>
+            <div class="pill">
+              <strong>RTMB role</strong>
+              Optional later, and only if a new model-based spatial estimator is desired.
+            </div>
+          </div>
+          <div class="callout">
+            <strong>Critical point:</strong> if the organization only wants one code base to maintain,
+            a standalone RTMB reimplementation of Sam’s pipeline is strategically weaker than integrating
+            the uncertainty process around Macebase Analysis.
+          </div>
+        </section>
+
+        <section id="program-context" class="card">
+          <h2>Program Context</h2>
+          <p>
+            The new context changes the evaluation in an important way. The project is no longer simply
+            choosing a technical language target. It is balancing four practical constraints:
+          </p>
+          <ul>
+            <li>the paper is nearly complete, so large methodological rewrites are poorly timed,</li>
+            <li>continued dependence on Sam’s direct implementation work is not a sustainable staffing model,</li>
+            <li>Wavefront Ecology is not currently available as a formal development path,</li>
+            <li>the organization wants one code base to maintain, centered on standard survey operations.</li>
+          </ul>
+          <p>
+            Given those constraints, the natural target architecture is not “replace Julia with another separate
+            uncertainty code base.” It is “reuse the uncertainty-generation ideas, but run standard survey
+            computations through Macebase Analysis inside each simulation replicate.”
+          </p>
+          <div class="callout">
+            <strong>Implication:</strong> the migration decision should be driven by operational convergence and
+            point-estimate parity, not by language preference alone.
+          </div>
+        </section>
+
+        <section id="current-architecture" class="card">
+          <h2>Current Architecture</h2>
+          <p>
+            The repository is organized around a Julia package in <code>src/</code>, survey-specific
+            Julia analysis scripts in <code>analyses/</code>, survey CSV inputs in <code>surveydata/</code>,
+            and a partial R translation in <code>R/</code>. The README explicitly describes the project
+            as Julia-based.
+          </p>
+          <p>
+            The main replicate loop is implemented in <code>src/ATBootstrap.jl</code>. A single
+            bootstrap iteration:
+          </p>
+          <ol>
+            <li>resamples scaling data,</li>
+            <li>samples selectivity, age-length, TS, calibration, near-bottom, and trawl assignment effects,</li>
+            <li>simulates NASC spatially,</li>
+            <li>converts simulated backscatter into abundance and biomass summaries.</li>
+          </ol>
+          <table>
+            <thead>
+              <tr>
+                <th>Area</th>
+                <th>Role in current pipeline</th>
+                <th>Migration significance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>src/preprocess_survey_data.jl</code></td>
+                <td>Data cleanup, projection, survey grid creation, merge of MACE and GAP inputs</td>
+                <td>Portable to plain R</td>
+              </tr>
+              <tr>
+                <td><code>src/spatial.jl</code></td>
+                <td>Variogram fitting, LU conditional simulation, z-distribution selection</td>
+                <td>Needs redesign for RTMB</td>
+              </tr>
+              <tr>
+                <td><code>src/mace_*.jl</code>, <code>src/calibration.jl</code>, <code>src/nearbottom.jl</code></td>
+                <td>Support models and stochastic perturbations</td>
+                <td>Mostly portable to R</td>
+              </tr>
+              <tr>
+                <td><code>analyses/dy*.jl</code></td>
+                <td>Survey-specific settings and orchestration</td>
+                <td>Should become R driver scripts, not RTMB code</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section id="why-rtmb-is-not-a-direct-port" class="card">
+          <h2>Why RTMB Is Not a Direct Port</h2>
+          <p>
+            RTMB is built for objective functions and automatic differentiation. This repository’s Julia
+            core does not define an objective function to optimize. It defines a simulation engine.
+          </p>
+          <p>
+            The bootstrap logic in <code>src/ATBootstrap.jl</code> depends on random draws at multiple steps.
+            Those steps include:
+          </p>
+          <ul>
+            <li>selectivity parameter draws,</li>
+            <li>age assignment draws from empirical categorical distributions,</li>
+            <li>target-strength perturbations,</li>
+            <li>calibration error draws,</li>
+            <li>near-bottom coefficient draws,</li>
+            <li>stochastic trawl assignment,</li>
+            <li>conditional spatial simulation of NASC.</li>
+          </ul>
+          <p>
+            That is valid for Monte Carlo uncertainty propagation, but it does not map directly to the
+            RTMB workflow. To use RTMB well, the model would need to be reformulated as something like:
+          </p>
+          <ul>
+            <li>a latent spatial random field,</li>
+            <li>an observation model for NASC,</li>
+            <li>possibly explicit fixed and random effects for calibration or selectivity,</li>
+            <li>a joint negative log-likelihood that RTMB can evaluate and optimize.</li>
+          </ul>
+        </section>
+
+        <section id="point-estimate-problem" class="card">
+          <h2>Point Estimate Disagreement</h2>
+          <p>
+            The new context identifies the most important current risk: the uncertainty workflow is producing
+            point estimates that disagree with the standard survey results, even though point estimates were
+            expected to align.
+          </p>
+          <p>
+            That shifts the near-term priority from uncertainty-method implementation to computational reconciliation.
+            Based on the repository structure, that concern is plausible. The Julia analysis scripts contain their own
+            survey setup, filtering, domain construction, class handling, and replicate-to-summary pipeline rather than
+            delegating the final survey calculation to a shared standard code base.
+          </p>
+          <p>
+            This means there are several likely sources of point-estimate drift:
+          </p>
+          <ul>
+            <li>differences in survey domain construction and grid definition,</li>
+            <li>differences in class inclusion, transect filtering, or log-range handling,</li>
+            <li>differences in acoustic-to-trawl assignment logic,</li>
+            <li>differences in how bottom-trawl strata are merged and weighted,</li>
+            <li>differences between Sam’s end-to-end survey computations and Macebase Analysis.</li>
+          </ul>
+          <p>
+            From a project-management standpoint, discovering the source of those discrepancies is more valuable than
+            accelerating toward RTMB. If point-estimate parity is not achieved first, a new implementation will only
+            make the disagreement harder to localize.
+          </p>
+        </section>
+
+        <section id="what-is-portable" class="card">
+          <h2>What Is Portable</h2>
+          <p>
+            Several components are straightforward candidates for plain R reimplementation, and most do not
+            need RTMB at all.
+          </p>
+          <h3>Preprocessing and survey construction</h3>
+          <p>
+            Grid creation, geometry handling, coordinate projection, and file normalization in
+            <code>src/preprocess_survey_data.jl</code> can be ported to R with <code>sf</code>,
+            <code>dplyr</code>, and related tooling.
+          </p>
+          <h3>Support models</h3>
+          <p>
+            TS functions, selectivity curves, age-length lookup logic, length-weight regression, calibration,
+            and near-bottom coefficients are all local computations with limited external dependencies.
+          </p>
+          <h3>Analysis orchestration</h3>
+          <p>
+            The survey-specific scripts in <code>analyses/</code> encode business rules such as log ranges,
+            classes to keep, and transect filtering. Those belong in R wrappers or configuration files, not
+            in RTMB templates.
+          </p>
+        </section>
+
+        <section id="what-requires-redesign" class="card">
+          <h2>What Requires Redesign</h2>
+          <p>
+            The spatial layer is the main blocker for an RTMB conversion.
+          </p>
+          <ul>
+            <li>
+              <strong>Variogram fitting and conditional simulation:</strong> the Julia implementation depends on
+              <code>GeoStats</code> setup and LU-based conditional simulation.
+            </li>
+            <li>
+              <strong>Z-distribution selection:</strong> the code chooses among several nonnegative families by
+              Monte Carlo histogram comparison and Kullback-Leibler divergence.
+            </li>
+            <li>
+              <strong>Conditional field generation:</strong> current output is generated by repeated simulation,
+              not by fitting a latent process under a single likelihood.
+            </li>
+          </ul>
+          <p>
+            This means the RTMB question is not “how do we translate <code>src/spatial.jl</code>?” but
+            “what spatial statistical model do we want instead?”
+          </p>
+        </section>
+
+        <section id="recommended-path" class="card">
+          <h2>Recommended Path</h2>
+          <ol>
+            <li>
+              Freeze existing Julia outputs in <code>analyses/results/</code> as golden-reference regression
+              targets for any migration work.
+            </li>
+            <li>
+              Build enough experience running the Julia implementation to document every place where its survey
+              computations can diverge from Macebase Analysis.
+            </li>
+            <li>
+              Create a reconciliation plan focused on point estimates: run deterministic, uncertainty-off cases
+              and compare every intermediate product against standard survey outputs.
+            </li>
+            <li>
+              Move the survey-result computation inside each simulation round to Macebase Analysis wherever feasible,
+              so the uncertainty process becomes a wrapper around the standard survey engine instead of a parallel
+              survey implementation.
+            </li>
+            <li>
+              Only after that, decide whether the uncertainty-generation layer should remain in Julia, be ported
+              to plain R, or be partially redesigned.
+            </li>
+            <li>
+              Consider RTMB only if the team later decides to replace the current spatial bootstrap with a fitted
+              latent-variable model. That would be a methodological change, not a maintenance-oriented port.
+            </li>
+          </ol>
+          <div class="callout">
+            <strong>Recommended sequencing:</strong> reconcile point estimates first, integrate with Macebase
+            Analysis second, choose the implementation language third, and consider RTMB only as a later modeling option.
+          </div>
+        </section>
+
+        <section id="evidence" class="card">
+          <h2>Evidence</h2>
+          <p>
+            The conclusions above are based on repository structure and code inspection.
+          </p>
+          <ul>
+            <li>
+              <code>README.md</code> describes the project as Julia software and points users to Julia-based workflows.
+            </li>
+            <li>
+              <code>src/ATBootstrap.jl</code> contains the main bootstrap loop and per-iteration stochastic logic.
+            </li>
+            <li>
+              <code>src/types.jl</code> shows that <code>ScalingClassProblem</code> is built around spatial simulation setup.
+            </li>
+            <li>
+              <code>src/spatial.jl</code> contains the GeoStats-based spatial machinery and the Monte Carlo z-family selection.
+            </li>
+            <li>
+              <code>R/funs.R</code> and <code>R/ATBootstrap.R</code> still contain placeholders for the core spatial layer,
+              which means the R port is not yet a trustworthy foundation for RTMB work.
+            </li>
+            <li>
+              The project notebook and manuscript materials indicate the method was intended to follow the standard
+              MACE survey workflow closely, which makes the current point-estimate disagreement especially important
+              to resolve before any reimplementation effort.
+            </li>
+          </ul>
+          <p class="footer">
+            Runtime check during review: Julia <code>1.11.7</code> and R <code>4.5.2</code> were available locally.
+            The assessment was structural; the full analysis pipeline was not executed as part of this report.
+          </p>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
