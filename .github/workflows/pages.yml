@@ -3,7 +3,7 @@ name: Deploy GitHub Pages
 on:
   push:
     branches:
-      - codex/R-convert
+      - main
     paths:
       - "docs/**"
       - ".github/workflows/pages.yml"
