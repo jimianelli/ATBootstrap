@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ATBootstrap RTMB Migration Evaluation</title>
+  <title>ATBootstrap R Migration Evaluation</title>
   <style>
     :root {
       --bg: #f5f1e8;
@@ -253,10 +253,10 @@
   <div class="page">
     <header class="hero">
       <p class="eyebrow">Repository Evaluation</p>
-      <h1>ATBootstrap Julia to RTMB Migration Evaluation</h1>
+      <h1>ATBootstrap R Migration Evaluation</h1>
       <p class="subtitle">
-        Assessment of this repository with a specific goal of understanding whether the Julia
-        components should be converted into RTMB, and where a direct port ends versus a model redesign begins.
+        Assessment of this repository with the decision to abandon RTMB and move the uncertainty
+        workflow toward plain R, with Macebase Analysis integration as the long-term operating target.
       </p>
       <div class="meta">
         <span>Date: March 13, 2026</span>
@@ -273,10 +273,10 @@
           <li><a href="#bottom-line">Bottom Line</a></li>
           <li><a href="#program-context">Program Context</a></li>
           <li><a href="#current-architecture">Current Architecture</a></li>
-          <li><a href="#why-rtmb-is-not-a-direct-port">Why RTMB Is Not a Direct Port</a></li>
+          <li><a href="#why-plain-r-is-the-better-fit">Why Plain R Is The Better Fit</a></li>
           <li><a href="#point-estimate-problem">Point Estimate Disagreement</a></li>
           <li><a href="#what-is-portable">What Is Portable</a></li>
-          <li><a href="#what-requires-redesign">What Requires Redesign</a></li>
+          <li><a href="#what-requires-redesign">What Requires Separate Work</a></li>
           <li><a href="#recommended-path">Recommended Path</a></li>
           <li><a href="#evidence">Evidence</a></li>
         </ul>
@@ -286,15 +286,16 @@
         <section id="bottom-line" class="card">
           <h2>Bottom Line</h2>
           <p>
-            With the added program context, the strongest recommendation is not “convert Julia to RTMB.”
-            It is “use this repository to understand and isolate the uncertainty logic, then move survey-result
-            computation into Macebase Analysis so the organization maintains one code base.”
+            With the added program context, the strongest recommendation is not to create another
+            framework rewrite. It is to use this repository to understand and isolate the uncertainty
+            logic, then move survey-result computation into Macebase Analysis so the organization
+            maintains one code base.
           </p>
           <p>
             The Julia core is still a stochastic bootstrap engine rather than a differentiable likelihood
-            model, so the technical RTMB conclusion does not change. What does change is the practical
-            recommendation: the first-order problem is point-estimate disagreement with standard survey
-            results, not lack of an RTMB implementation.
+            model. The practical recommendation is now clear: the first-order problem is point-estimate
+            disagreement with standard survey results, and the implementation target should be plain R
+            around the standard survey code base rather than RTMB.
           </p>
           <div class="summary">
             <div class="pill">
@@ -306,14 +307,14 @@
               One maintained code base centered on Macebase Analysis.
             </div>
             <div class="pill">
-              <strong>RTMB role</strong>
-              Optional later, and only if a new model-based spatial estimator is desired.
+              <strong>Implementation path</strong>
+              Plain R around Macebase Analysis, with the spatial layer handled separately.
             </div>
           </div>
           <div class="callout">
             <strong>Critical point:</strong> if the organization only wants one code base to maintain,
-            a standalone RTMB reimplementation of Sam’s pipeline is strategically weaker than integrating
-            the uncertainty process around Macebase Analysis.
+            a standalone rewrite of Sam’s pipeline is strategically weaker than integrating the uncertainty
+            process around Macebase Analysis in R.
           </div>
         </section>
 
@@ -375,7 +376,7 @@
               <tr>
                 <td><code>src/spatial.jl</code></td>
                 <td>Variogram fitting, LU conditional simulation, z-distribution selection</td>
-                <td>Needs redesign for RTMB</td>
+                <td>Needs a separate R strategy or continued Julia boundary</td>
               </tr>
               <tr>
                 <td><code>src/mace_*.jl</code>, <code>src/calibration.jl</code>, <code>src/nearbottom.jl</code></td>
@@ -385,17 +386,17 @@
               <tr>
                 <td><code>analyses/dy*.jl</code></td>
                 <td>Survey-specific settings and orchestration</td>
-                <td>Should become R driver scripts, not RTMB code</td>
+                <td>Should become R driver scripts and configuration</td>
               </tr>
             </tbody>
           </table>
         </section>
 
-        <section id="why-rtmb-is-not-a-direct-port" class="card">
-          <h2>Why RTMB Is Not a Direct Port</h2>
+        <section id="why-plain-r-is-the-better-fit" class="card">
+          <h2>Why Plain R Is The Better Fit</h2>
           <p>
-            RTMB is built for objective functions and automatic differentiation. This repository’s Julia
-            core does not define an objective function to optimize. It defines a simulation engine.
+            The Julia core does not define an objective function to optimize. It defines a simulation
+            engine, which makes a plain-R port a better maintenance fit than another model-oriented rewrite.
           </p>
           <p>
             The bootstrap logic in <code>src/ATBootstrap.jl</code> depends on random draws at multiple steps.
@@ -412,14 +413,20 @@
           </ul>
           <p>
             That is valid for Monte Carlo uncertainty propagation, but it does not map directly to the
-            RTMB workflow. To use RTMB well, the model would need to be reformulated as something like:
+            kind of workflow used in Macebase Analysis. Forcing this into another framework would require
+            a methodological redesign such as:
           </p>
           <ul>
             <li>a latent spatial random field,</li>
             <li>an observation model for NASC,</li>
             <li>possibly explicit fixed and random effects for calibration or selectivity,</li>
-            <li>a joint negative log-likelihood that RTMB can evaluate and optimize.</li>
+            <li>a joint negative log-likelihood for an entirely new fitted model.</li>
           </ul>
+          <p>
+            That is a different project from porting the existing uncertainty workflow. If the goal is one
+            maintained code base, plain R is the better fit for the non-spatial pieces and for integration
+            with existing survey computations.
+          </p>
         </section>
 
         <section id="point-estimate-problem" class="card">
@@ -447,7 +454,7 @@
           </ul>
           <p>
             From a project-management standpoint, discovering the source of those discrepancies is more valuable than
-            accelerating toward RTMB. If point-estimate parity is not achieved first, a new implementation will only
+            accelerating toward another rewrite. If point-estimate parity is not achieved first, a new implementation will only
             make the disagreement harder to localize.
           </p>
         </section>
@@ -455,8 +462,8 @@
         <section id="what-is-portable" class="card">
           <h2>What Is Portable</h2>
           <p>
-            Several components are straightforward candidates for plain R reimplementation, and most do not
-            need RTMB at all.
+            Several components are straightforward candidates for plain R reimplementation, and they align
+            well with the one-code-base goal.
           </p>
           <h3>Preprocessing and survey construction</h3>
           <p>
@@ -472,15 +479,14 @@
           <h3>Analysis orchestration</h3>
           <p>
             The survey-specific scripts in <code>analyses/</code> encode business rules such as log ranges,
-            classes to keep, and transect filtering. Those belong in R wrappers or configuration files, not
-            in RTMB templates.
+            classes to keep, and transect filtering. Those belong in R wrappers or configuration files.
           </p>
         </section>
 
         <section id="what-requires-redesign" class="card">
-          <h2>What Requires Redesign</h2>
+          <h2>What Requires Separate Work</h2>
           <p>
-            The spatial layer is the main blocker for an RTMB conversion.
+            The spatial layer is the main unresolved component of the port.
           </p>
           <ul>
             <li>
@@ -497,8 +503,9 @@
             </li>
           </ul>
           <p>
-            This means the RTMB question is not “how do we translate <code>src/spatial.jl</code>?” but
-            “what spatial statistical model do we want instead?”
+            This means the question is not how to force <code>src/spatial.jl</code> into another framework,
+            but whether the spatial simulator should remain a Julia dependency for a while, receive a separate
+            R implementation, or be replaced later with a different model.
           </p>
         </section>
 
@@ -527,13 +534,13 @@
               to plain R, or be partially redesigned.
             </li>
             <li>
-              Consider RTMB only if the team later decides to replace the current spatial bootstrap with a fitted
-              latent-variable model. That would be a methodological change, not a maintenance-oriented port.
+              Keep the implementation target in R so the migration does not create a second long-term maintenance
+              path apart from Macebase Analysis.
             </li>
           </ol>
           <div class="callout">
             <strong>Recommended sequencing:</strong> reconcile point estimates first, integrate with Macebase
-            Analysis second, choose the implementation language third, and consider RTMB only as a later modeling option.
+            Analysis second, port the reusable workflow into R third, and handle the spatial layer as a separate decision.
           </div>
         </section>
 
@@ -556,8 +563,8 @@
               <code>src/spatial.jl</code> contains the GeoStats-based spatial machinery and the Monte Carlo z-family selection.
             </li>
             <li>
-              <code>R/funs.R</code> and <code>R/ATBootstrap.R</code> still contain placeholders for the core spatial layer,
-              which means the R port is not yet a trustworthy foundation for RTMB work.
+              <code>R/funs.R</code> and <code>R/ATBootstrap.R</code> still stop short of the full spatial layer,
+              which means the R port is not yet a complete foundation for the full uncertainty workflow.
             </li>
             <li>
               The project notebook and manuscript materials indicate the method was intended to follow the standard
