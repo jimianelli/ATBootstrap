@@ -70,8 +70,8 @@ end
 elem_1 = GLMakie.MarkerElement(color=colors[1], marker=:circle)
 elem_2 = GLMakie.MarkerElement(color=colors[2], marker=:circle)
 GLMakie.Legend(fig[1,3], 
-    [elem_1, elem_2],
-    ["Bottom", "Midwater"]
+    [elem_2, elem_1],
+    ["Midwater", "Near-bottom"]
 )
 GLMakie.save(joinpath(@__DIR__, "plots", "DY201807_maps.png"), fig,
     size=(700, 300), px_per_unit=4)
