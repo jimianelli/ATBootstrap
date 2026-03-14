@@ -1,0 +1,41 @@
+suite,survey,file,status,row_count_reference,row_count_r,col_count_reference,col_count_r,schema_match,row_count_match,content_match,missing_columns,extra_columns,max_numeric_diff,note
+preprocess_parity,200707,scaling.csv,PASS,59401,59401,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,200707,acoustics_projected.csv,PASS,2712,2712,8,8,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,200707,length_weight.csv,PASS,4886,4886,5,5,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,200707,trawl_locations_projected.csv,FAIL,359,372,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,200707,surveygrid.csv,FAIL,3235,3532,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3235 reference rows vs 3532 R rows.
+preprocess_parity,200909,scaling.csv,PASS,36720,36720,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,200909,acoustics_projected.csv,FAIL,2652,2649,8,8,TRUE,FALSE,FALSE,,,NA,Row count differs: 2652 reference rows vs 2649 R rows.
+preprocess_parity,200909,length_weight.csv,REFERENCE_MISSING,NA,NA,NA,NA,NA,NA,NA,,,NA,Reference file is not present in surveydata.
+preprocess_parity,200909,trawl_locations_projected.csv,FAIL,316,334,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,200909,surveygrid.csv,FAIL,3192,3481,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3192 reference rows vs 3481 R rows.
+preprocess_parity,201006,scaling.csv,PASS,71618,71618,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201006,acoustics_projected.csv,PASS,2649,2649,8,8,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201006,length_weight.csv,REFERENCE_MISSING,NA,NA,NA,NA,NA,NA,NA,,,NA,Reference file is not present in surveydata.
+preprocess_parity,201006,trawl_locations_projected.csv,FAIL,477,515,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,201006,surveygrid.csv,FAIL,3198,3493,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3198 reference rows vs 3493 R rows.
+preprocess_parity,201207,scaling.csv,PASS,52391,52391,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201207,acoustics_projected.csv,FAIL,2754,2748,8,8,TRUE,FALSE,FALSE,,,NA,Row count differs: 2754 reference rows vs 2748 R rows.
+preprocess_parity,201207,length_weight.csv,REFERENCE_MISSING,NA,NA,NA,NA,NA,NA,NA,,,NA,Reference file is not present in surveydata.
+preprocess_parity,201207,trawl_locations_projected.csv,FAIL,491,522,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,201207,surveygrid.csv,FAIL,3314,3585,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3314 reference rows vs 3585 R rows.
+preprocess_parity,201407,scaling.csv,PASS,54932,54932,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201407,acoustics_projected.csv,PASS,2733,2733,8,8,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201407,length_weight.csv,REFERENCE_MISSING,NA,NA,NA,NA,NA,NA,NA,,,NA,Reference file is not present in surveydata.
+preprocess_parity,201407,trawl_locations_projected.csv,FAIL,375,386,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,201407,surveygrid.csv,FAIL,3288,3577,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3288 reference rows vs 3577 R rows.
+preprocess_parity,201608,scaling.csv,PASS,52826,52826,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201608,acoustics_projected.csv,PASS,1930,1930,8,8,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201608,length_weight.csv,REFERENCE_MISSING,NA,NA,NA,NA,NA,NA,NA,,,NA,Reference file is not present in surveydata.
+preprocess_parity,201608,trawl_locations_projected.csv,FAIL,595,629,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,201608,surveygrid.csv,FAIL,3458,3748,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3458 reference rows vs 3748 R rows.
+preprocess_parity,201807,scaling.csv,PASS,83735,83735,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,201807,acoustics_projected.csv,FAIL,2682,2679,8,8,TRUE,FALSE,FALSE,,,NA,Row count differs: 2682 reference rows vs 2679 R rows.
+preprocess_parity,201807,length_weight.csv,REFERENCE_MISSING,NA,NA,NA,NA,NA,NA,NA,,,NA,Reference file is not present in surveydata.
+preprocess_parity,201807,trawl_locations_projected.csv,FAIL,371,386,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,201807,surveygrid.csv,FAIL,3220,3494,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3220 reference rows vs 3494 R rows.
+preprocess_parity,202207,scaling.csv,PASS,38517,38517,13,13,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,202207,acoustics_projected.csv,PASS,1680,1680,8,8,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,202207,length_weight.csv,PASS,3575,3575,5,5,TRUE,TRUE,TRUE,,,0,Reference and R-generated CSVs match after canonical row sorting.
+preprocess_parity,202207,trawl_locations_projected.csv,FAIL,313,338,8,6,FALSE,FALSE,FALSE,"lla, utm",,NA,"Schema differs. Missing in R output: lla, utm. Extra in R output: none."
+preprocess_parity,202207,surveygrid.csv,FAIL,3673,4325,2,2,TRUE,FALSE,FALSE,,,NA,Row count differs: 3673 reference rows vs 4325 R rows.

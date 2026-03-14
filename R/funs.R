@@ -17,6 +17,9 @@ km2nmi <- 1 / 1.852
 TS_SE_DEFAULT <- 3.0
 nearbottom_intercept <- 3.43
 
+# MASS exports `select()`, which otherwise masks dplyr inside this file.
+select <- dplyr::select
+
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
 }
@@ -30,7 +33,7 @@ nearbottom_intercept <- 3.43
 }
 
 .drop_helper_cols <- function(df) {
-  df %>% select(-any_of(c("X", "Column1")))
+  df %>% dplyr::select(-dplyr::any_of(c("X", "Column1")))
 }
 
 .read_csv_local <- function(path, na = c(".", "NA")) {

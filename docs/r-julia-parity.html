@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap R and Julia Parity Evidence</title>
+  <style>
+    :root {
+      --bg: #f5f2ea;
+      --panel: #fffdf9;
+      --ink: #1f2933;
+      --muted: #5f6b74;
+      --accent: #0f766e;
+      --accent-soft: #e4f3f0;
+      --warn: #9a6700;
+      --warn-soft: #fff3cf;
+      --fail: #b42318;
+      --fail-soft: #fee4e2;
+      --line: #ddd4c8;
+      --shadow: 0 16px 40px rgba(31, 41, 51, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28%),
+        linear-gradient(180deg, #faf7f1 0%, var(--bg) 100%);
+      line-height: 1.62;
+    }
+    .page { max-width: 1080px; margin: 0 auto; padding: 40px 24px 72px; }
+    .hero {
+      background: linear-gradient(135deg, #0f766e, #183e5c);
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 34px 30px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.12em; font-size: 0.8rem; opacity: 0.84; }
+    h1 { margin: 0 0 10px; font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.05; }
+    .hero p { margin: 0; max-width: 54rem; color: rgba(248, 250, 252, 0.92); font-size: 1.05rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+    .meta span { background: rgba(255,255,255,0.12); padding: 6px 10px; border-radius: 999px; font-size: 0.92rem; }
+    .section { margin-top: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 24px 26px; box-shadow: var(--shadow); }
+    h2 { margin: 0 0 14px; font-size: 1.45rem; line-height: 1.2; }
+    p { margin: 0 0 12px; }
+    ul { margin: 0 0 12px 22px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    th, td { border-top: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-top: 14px; }
+    .mini { border-radius: 16px; background: var(--accent-soft); border: 1px solid rgba(15, 118, 110, 0.16); padding: 14px 16px; }
+    .mini strong { display: block; margin-bottom: 4px; color: var(--accent); }
+    .callout { margin-top: 14px; border-left: 6px solid var(--warn); background: var(--warn-soft); border-radius: 14px; padding: 16px 18px; }
+    .callout.fail { border-left-color: var(--fail); background: var(--fail-soft); }
+    .badge { display: inline-block; padding: 4px 9px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+    .badge.pass { background: #dcfae6; color: #166534; }
+    .badge.partial { background: #fef0c7; color: #854d0e; }
+    .badge.fail { background: #fee4e2; color: #b42318; }
+    .badge.blocked { background: #e4e7ec; color: #344054; }
+    code { font-family: "SFMono-Regular", Menlo, Consolas, monospace; background: #f0ebe4; padding: 0.12em 0.4em; border-radius: 6px; font-size: 0.92em; }
+    a { color: #0f5f9c; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Parity Evidence</p>
+      <h1>ATBootstrap R and Julia Parity Evidence</h1>
+      <p>This report documents the current evidence base for saying the R work matches the Julia implementation. It is intentionally strict: it records what passes today, what still fails, and what cannot yet be claimed because the spatial simulator is not ported.</p>
+      <div class="meta">
+        <span>Generated: 2026-03-13 20:28 PDT</span>
+        <span>Git ref: ab1778e</span>
+        <span>Overall status: Partial evidence</span>
+        <span><a href="./artifacts/r-julia-parity-summary.csv" style="color:#f8fafc;">Summary CSV</a></span>
+        <span><a href="./artifacts/r-julia-preprocess-details.csv" style="color:#f8fafc;">Detail CSV</a></span>
+      </div>
+    </header>
+    <section class="section">
+      <h2>Bottom Line</h2>
+      <p>The repository now has a reproducible parity ledger, but it does not yet support a blanket claim that the R implementation fully matches Julia. The strongest current evidence is in frozen Julia outputs and several preprocessing products. The strongest current gaps are the survey grid and projected trawl-location products, plus the entire spatial/bootstrap layer.</p>
+      <div class="grid">
+        <div class="mini"><strong>What passes</strong> Frozen Julia result hashes, the non-spatial R smoke test, and several preprocessing outputs including <code>scaling.csv</code> across all checked surveys.</div>
+        <div class="mini"><strong>What fails</strong> The current R preprocessing does not yet reproduce all checked Julia-era <code>surveygrid.csv</code> and <code>trawl_locations_projected.csv</code> files.</div>
+        <div class="mini"><strong>What is blocked</strong> Full end-to-end bootstrap parity remains out of scope until the spatial simulator question is resolved.</div>
+      </div>
+    </section>
+    <section class="section">
+      <h2>Evidence Summary</h2>
+<table class="summary-table"><thead><tr><th>Check</th><th>Status</th><th>Scope</th><th>Note</th></tr></thead><tbody><tr><td>Frozen Julia output hashes</td><td><span class="badge pass">PASS</span></td><td>analyses/results against tests/golden/analyses_results</td><td>Matched 33 frozen Julia output files.</td></tr><tr><td>Preprocessing parity overall</td><td><span class="badge partial">PARTIAL</span></td><td>Selected surveydata directories regenerated in R and compared to checked-in references</td><td>15 file-level passes, 19 file-level failures, 6 reference-missing checks.</td></tr><tr><td>Preprocessing parity: acoustics_projected.csv</td><td><span class="badge partial">PARTIAL</span></td><td>R preprocess_survey_data() against checked-in Julia-era surveydata outputs</td><td>5 passes, 3 fails, 0 reference-missing.</td></tr><tr><td>Preprocessing parity: length_weight.csv</td><td><span class="badge pass">PASS</span></td><td>R preprocess_survey_data() against checked-in Julia-era surveydata outputs</td><td>2 passes, 0 fails, 6 reference-missing.</td></tr><tr><td>Preprocessing parity: scaling.csv</td><td><span class="badge pass">PASS</span></td><td>R preprocess_survey_data() against checked-in Julia-era surveydata outputs</td><td>8 passes, 0 fails, 0 reference-missing.</td></tr><tr><td>Preprocessing parity: surveygrid.csv</td><td><span class="badge fail">FAIL</span></td><td>R preprocess_survey_data() against checked-in Julia-era surveydata outputs</td><td>0 passes, 8 fails, 0 reference-missing.</td></tr><tr><td>Preprocessing parity: trawl_locations_projected.csv</td><td><span class="badge fail">FAIL</span></td><td>R preprocess_survey_data() against checked-in Julia-era surveydata outputs</td><td>0 passes, 8 fails, 0 reference-missing.</td></tr><tr><td>R non-spatial deterministic smoke test</td><td><span class="badge pass">PASS</span></td><td>simulate_class_iteration() with an injected constant simulator</td><td>Generated 37 non-spatial result rows for survey 202207 .</td></tr><tr><td>Full R versus Julia bootstrap parity</td><td><span class="badge blocked">BLOCKED</span></td><td>Whole-pipeline replicate and summary comparison</td><td>Not yet claimable: the R port intentionally stops short of the spatial simulator, so direct end-to-end bootstrap parity cannot be demonstrated from this branch.</td></tr></tbody></table>    </section>
+    <section class="section">
+      <h2>Preprocessing Parity by Output File</h2>
+      <p>These checks regenerate selected <code>surveydata/</code> products in R from the raw inputs, then compare them against the checked-in Julia-era CSVs after canonical row sorting. This removes row-order noise and surfaces real content differences.</p>
+<table class="summary-table"><thead><tr><th>Preprocess output</th><th>Status</th><th>pass</th><th>fail</th><th>reference_missing</th></tr></thead><tbody><tr><td>acoustics_projected.csv</td><td>PARTIAL</td><td>5</td><td>3</td><td>0</td></tr><tr><td>length_weight.csv</td><td>PASS</td><td>2</td><td>0</td><td>6</td></tr><tr><td>scaling.csv</td><td>PASS</td><td>8</td><td>0</td><td>0</td></tr><tr><td>surveygrid.csv</td><td>FAIL</td><td>0</td><td>8</td><td>0</td></tr><tr><td>trawl_locations_projected.csv</td><td>FAIL</td><td>0</td><td>8</td><td>0</td></tr></tbody></table>      <div class="callout fail"><strong>Current interpretation:</strong> the preprocessing path is partially aligned, not fully aligned. That is already useful evidence because it localizes the mismatch before the uncertainty/bootstrap layer.</div>
+    </section>
+    <section class="section">
+      <h2>Survey-by-Survey Detail</h2>
+<table class="detail-table"><thead><tr><th>Survey</th><th>File</th><th>Status</th><th>Reference rows</th><th>R rows</th><th>Reference cols</th><th>R cols</th><th>Schema match</th><th>Content match</th><th>Note</th></tr></thead><tbody><tr><td>200707</td><td>scaling.csv</td><td>PASS</td><td>59401</td><td>59401</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>200707</td><td>acoustics_projected.csv</td><td>PASS</td><td>2712</td><td>2712</td><td>8</td><td>8</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>200707</td><td>length_weight.csv</td><td>PASS</td><td>4886</td><td>4886</td><td>5</td><td>5</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>200707</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>359</td><td>372</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>200707</td><td>surveygrid.csv</td><td>FAIL</td><td>3235</td><td>3532</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3235 reference rows vs 3532 R rows.</td></tr><tr><td>200909</td><td>scaling.csv</td><td>PASS</td><td>36720</td><td>36720</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>200909</td><td>acoustics_projected.csv</td><td>FAIL</td><td>2652</td><td>2649</td><td>8</td><td>8</td><td>yes</td><td>no</td><td>Row count differs: 2652 reference rows vs 2649 R rows.</td></tr><tr><td>200909</td><td>length_weight.csv</td><td>REFERENCE_MISSING</td><td></td><td></td><td></td><td></td><td></td><td></td><td>Reference file is not present in surveydata.</td></tr><tr><td>200909</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>316</td><td>334</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>200909</td><td>surveygrid.csv</td><td>FAIL</td><td>3192</td><td>3481</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3192 reference rows vs 3481 R rows.</td></tr><tr><td>201006</td><td>scaling.csv</td><td>PASS</td><td>71618</td><td>71618</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201006</td><td>acoustics_projected.csv</td><td>PASS</td><td>2649</td><td>2649</td><td>8</td><td>8</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201006</td><td>length_weight.csv</td><td>REFERENCE_MISSING</td><td></td><td></td><td></td><td></td><td></td><td></td><td>Reference file is not present in surveydata.</td></tr><tr><td>201006</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>477</td><td>515</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>201006</td><td>surveygrid.csv</td><td>FAIL</td><td>3198</td><td>3493</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3198 reference rows vs 3493 R rows.</td></tr><tr><td>201207</td><td>scaling.csv</td><td>PASS</td><td>52391</td><td>52391</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201207</td><td>acoustics_projected.csv</td><td>FAIL</td><td>2754</td><td>2748</td><td>8</td><td>8</td><td>yes</td><td>no</td><td>Row count differs: 2754 reference rows vs 2748 R rows.</td></tr><tr><td>201207</td><td>length_weight.csv</td><td>REFERENCE_MISSING</td><td></td><td></td><td></td><td></td><td></td><td></td><td>Reference file is not present in surveydata.</td></tr><tr><td>201207</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>491</td><td>522</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>201207</td><td>surveygrid.csv</td><td>FAIL</td><td>3314</td><td>3585</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3314 reference rows vs 3585 R rows.</td></tr><tr><td>201407</td><td>scaling.csv</td><td>PASS</td><td>54932</td><td>54932</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201407</td><td>acoustics_projected.csv</td><td>PASS</td><td>2733</td><td>2733</td><td>8</td><td>8</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201407</td><td>length_weight.csv</td><td>REFERENCE_MISSING</td><td></td><td></td><td></td><td></td><td></td><td></td><td>Reference file is not present in surveydata.</td></tr><tr><td>201407</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>375</td><td>386</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>201407</td><td>surveygrid.csv</td><td>FAIL</td><td>3288</td><td>3577</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3288 reference rows vs 3577 R rows.</td></tr><tr><td>201608</td><td>scaling.csv</td><td>PASS</td><td>52826</td><td>52826</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201608</td><td>acoustics_projected.csv</td><td>PASS</td><td>1930</td><td>1930</td><td>8</td><td>8</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201608</td><td>length_weight.csv</td><td>REFERENCE_MISSING</td><td></td><td></td><td></td><td></td><td></td><td></td><td>Reference file is not present in surveydata.</td></tr><tr><td>201608</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>595</td><td>629</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>201608</td><td>surveygrid.csv</td><td>FAIL</td><td>3458</td><td>3748</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3458 reference rows vs 3748 R rows.</td></tr><tr><td>201807</td><td>scaling.csv</td><td>PASS</td><td>83735</td><td>83735</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>201807</td><td>acoustics_projected.csv</td><td>FAIL</td><td>2682</td><td>2679</td><td>8</td><td>8</td><td>yes</td><td>no</td><td>Row count differs: 2682 reference rows vs 2679 R rows.</td></tr><tr><td>201807</td><td>length_weight.csv</td><td>REFERENCE_MISSING</td><td></td><td></td><td></td><td></td><td></td><td></td><td>Reference file is not present in surveydata.</td></tr><tr><td>201807</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>371</td><td>386</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>201807</td><td>surveygrid.csv</td><td>FAIL</td><td>3220</td><td>3494</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3220 reference rows vs 3494 R rows.</td></tr><tr><td>202207</td><td>scaling.csv</td><td>PASS</td><td>38517</td><td>38517</td><td>13</td><td>13</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>202207</td><td>acoustics_projected.csv</td><td>PASS</td><td>1680</td><td>1680</td><td>8</td><td>8</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>202207</td><td>length_weight.csv</td><td>PASS</td><td>3575</td><td>3575</td><td>5</td><td>5</td><td>yes</td><td>yes</td><td>Reference and R-generated CSVs match after canonical row sorting.</td></tr><tr><td>202207</td><td>trawl_locations_projected.csv</td><td>FAIL</td><td>313</td><td>338</td><td>8</td><td>6</td><td>no</td><td>no</td><td>Schema differs. Missing in R output: lla, utm. Extra in R output: none.</td></tr><tr><td>202207</td><td>surveygrid.csv</td><td>FAIL</td><td>3673</td><td>4325</td><td>2</td><td>2</td><td>yes</td><td>no</td><td>Row count differs: 3673 reference rows vs 4325 R rows.</td></tr></tbody></table>    </section>
+    <section class="section">
+      <h2>How To Re-run</h2>
+      <ul>
+        <li>Run <code>Rscript tests/generate_r_julia_parity_report.R</code>.</li>
+        <li>Review <code>docs/r-julia-parity.html</code> for the rendered report.</li>
+        <li>Review <code>docs/artifacts/r-julia-parity-summary.csv</code> and <code>docs/artifacts/r-julia-preprocess-details.csv</code> for machine-readable outputs.</li>
+      </ul>
+    </section>
+    <section class="section">
+      <h2>Claim Boundary</h2>
+      <p>This report should be cited as evidence of current parity status, not as proof of full equivalence. Full equivalence would require either direct Julia-generated reference artifacts for the same deterministic R cases or successful end-to-end survey parity after the spatial layer is resolved.</p>
+    </section>
+  </div>
+</body>
+</html>
+
