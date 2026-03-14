@@ -59,6 +59,25 @@ select <- dplyr::select
   df
 }
 
+.format_lla_string <- function(lat, lon) {
+  paste0(
+    "LLA(lat=", format(lat, trim = TRUE, digits = 10), "\u00b0, ",
+    "lon=", format(lon, trim = TRUE, digits = 12), "\u00b0, alt=0.0)"
+  )
+}
+
+.format_utm_string <- function(x_km, y_km) {
+  x_m <- x_km * 1000
+  y_m <- y_km * 1000
+  paste0(
+    "UTM(",
+    format(x_m, trim = TRUE, digits = 17),
+    ", ",
+    format(y_m, trim = TRUE, digits = 17),
+    ", 0.0)"
+  )
+}
+
 .normalize_lengths <- function(x, target) {
   if (length(x) == target) {
     x
@@ -914,16 +933,41 @@ stepwise_error <- function(atbp, surveydata, nreplicates = 500, remove = FALSE) 
   ord_values <- round(transect[[order_col]] / dx) * dx
   line_df <- tibble(order_value = ord_values, x = transect$x, y = transect$y) %>%
     group_by(order_value) %>%
-    summarise(x = mean(x), y = mean(y), .groups = "drop") %>%
-    arrange(order_value)
+    summarise(
+      x = if (identical(order_col, "x")) first(order_value) else mean(x),
+      y = if (identical(order_col, "y")) first(order_value) else mean(y),
+      .groups = "drop"
+    ) %>%
+    arrange(order_value) %>%
+    distinct(x, y, .keep_all = TRUE)
 
   geom <- if (nrow(line_df) > 1) {
-    st_sfc(st_linestring(as.matrix(line_df[, c("x", "y")])), crs = 32603)
+    xmat <- t(as.matrix(line_df[, c("x", "y")]))
+    seg <- xmat[, -1, drop = FALSE] - xmat[, -ncol(xmat), drop = FALSE]
+    seg_norm <- sqrt(colSums(seg^2))
+    seg <- sweep(seg, 2, seg_norm, "/")
+    width_km <- method$width / 2 * 1.852 * (1 + method$buffer)
+    seg <- seg * width_km
+    seg <- cbind(seg, seg[, ncol(seg), drop = FALSE])
+
+    rot_left <- matrix(c(0, -1, 1, 0), nrow = 2, byrow = TRUE)
+    rot_right <- matrix(c(0, 1, -1, 0), nrow = 2, byrow = TRUE)
+    left <- rot_left %*% seg + xmat
+    right <- rot_right %*% seg + xmat
+    bounds <- rbind(
+      t(left),
+      t(right[, ncol(right):1, drop = FALSE]),
+      matrix(left[, 1], nrow = 1)
+    )
+    st_sfc(st_polygon(list(bounds)), crs = 32603)
   } else {
-    st_as_sf(line_df, coords = c("x", "y"), crs = 32603) %>% st_geometry()
+    st_buffer(
+      st_as_sf(line_df, coords = c("x", "y"), crs = 32603) %>% st_geometry(),
+      dist = method$width / 2 * 1.852 * (1 + method$buffer)
+    )
   }
 
-  st_buffer(geom, dist = method$width / 2 * 1.852 * (1 + method$buffer), endCapStyle = "ROUND", joinStyle = "ROUND")
+  st_make_valid(geom)
 }
 
 survey_domain <- function(acoustics, method = TransectRibbons(), order = "y", dx = 10, dy = dx) {
@@ -948,7 +992,7 @@ grid_domain <- function(domain_sf, dx, dy = dx) {
     y = seq(bbox[["ymin"]], bbox[["ymax"]], by = dy)
   )
   grid_sf <- st_as_sf(grid, coords = c("x", "y"), crs = st_crs(domain_sf))
-  inside <- lengths(st_within(grid_sf, domain_sf)) > 0
+  inside <- lengths(st_intersects(grid_sf, domain_sf)) > 0
   coords <- st_coordinates(grid_sf[inside, ])
   tibble(x = coords[, 1], y = coords[, 2])
 }
@@ -999,8 +1043,8 @@ merge_scaling <- function(scaling_mace, scaling_gap) {
 }
 
 merge_trawl_locations <- function(trawl_locations_mace, trawl_locations_gap) {
-  survey <- unique(trawl_locations_mace$survey)
-  if (length(survey) != 1L) {
+  survey_id <- unique(trawl_locations_mace$survey)
+  if (length(survey_id) != 1L) {
     stop("Expected a single survey in trawl location inputs.", call. = FALSE)
   }
 
@@ -1009,7 +1053,7 @@ merge_trawl_locations <- function(trawl_locations_mace, trawl_locations_gap) {
     select(survey, haul_id, latitude, longitude)
 
   tl_gap <- trawl_locations_gap %>%
-    mutate(survey = survey[[1]], haul_id = make_haul_id("GAP", vessel, event_id)) %>%
+    mutate(survey = .env$survey_id[[1]], haul_id = make_haul_id("GAP", vessel, event_id)) %>%
     select(survey, haul_id, latitude, longitude)
 
   bind_rows(tl_mace, tl_gap)
@@ -1087,9 +1131,16 @@ preprocess_survey_data <- function(surveydir,
     )
 
   trawl_locations <- .as_utm_km(trawl_locations, "longitude", "latitude", zone = 3)
+  trawl_locations <- trawl_locations %>%
+    mutate(
+      lla = .format_lla_string(latitude, longitude),
+      utm = .format_utm_string(x, y)
+    )
   trawl_sf <- st_as_sf(trawl_locations, coords = c("x", "y"), crs = 32603, remove = FALSE)
-  inside <- lengths(st_within(trawl_sf, surveyhull)) > 0
+  inside <- lengths(st_intersects(trawl_sf, surveyhull)) > 0
   trawl_locations <- trawl_locations[inside, , drop = FALSE]
+  trawl_locations <- trawl_locations %>%
+    select(survey, haul_id, latitude, longitude, lla, utm, x, y)
 
   length_weight <- .read_csv_local(file.path(surveydir, "measurements.csv"), na = missingstring)
   names(length_weight) <- tolower(names(length_weight))

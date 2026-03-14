@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap Preprocessing Parity Notes</title>
+  <style>
+    :root {
+      --bg: #f5f2eb;
+      --panel: #fffdf9;
+      --ink: #1f2933;
+      --muted: #5e6a73;
+      --line: #ddd4c8;
+      --accent: #0f766e;
+      --accent-soft: #e3f3f0;
+      --warn: #8a5a00;
+      --warn-soft: #fff3d3;
+      --shadow: 0 16px 36px rgba(31, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 28%),
+        linear-gradient(180deg, #fbf8f3 0%, var(--bg) 100%);
+      line-height: 1.62;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 38px 24px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #0f766e, #183e5c);
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 34px 30px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      font-size: 0.8rem;
+      opacity: 0.84;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      line-height: 1.05;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 52rem;
+      color: rgba(248, 250, 252, 0.92);
+      font-size: 1.05rem;
+    }
+
+    .section {
+      margin-top: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px 26px;
+      box-shadow: var(--shadow);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.45rem;
+      line-height: 1.2;
+    }
+
+    p { margin: 0 0 12px; }
+    ul { margin: 0 0 12px 22px; }
+    li + li { margin-top: 8px; }
+
+    .callout {
+      margin-top: 14px;
+      border-left: 6px solid var(--warn);
+      background: var(--warn-soft);
+      border-radius: 14px;
+      padding: 16px 18px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .mini {
+      border-radius: 16px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      padding: 14px 16px;
+    }
+
+    .mini strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: #f0ebe4;
+      padding: 0.12em 0.4em;
+      border-radius: 6px;
+    }
+
+    a { color: #0f5f9c; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Implementation Notes</p>
+      <h1>Preprocessing Parity Notes</h1>
+      <p>
+        Focused notes on the preprocessing fixes needed to move the repository toward a full R implementation,
+        with emphasis on the survey grid and projected trawl-location products.
+      </p>
+    </header>
+
+    <section class="section">
+      <h2>What Changed</h2>
+      <div class="grid">
+        <div class="mini">
+          <strong>Ribbon geometry</strong>
+          The R transect-ribbon domain builder now follows the Julia logic directly instead of buffering
+          lines with round caps in <code>sf</code>.
+        </div>
+        <div class="mini">
+          <strong>Snapped transect axis</strong>
+          The ordering coordinate is now snapped to the rounded transect grid before the ribbon polygon is built,
+          matching the Julia preprocessing behavior.
+        </div>
+        <div class="mini">
+          <strong>Trawl output schema</strong>
+          <code>trawl_locations_projected.csv</code> now restores the Julia-era helper columns
+          <code>lla</code> and <code>utm</code> in addition to the operational coordinates.
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Why These Fixes Mattered</h2>
+      <p>
+        The original R preprocessing mismatch was not a small numeric tolerance issue. It came from a different
+        survey-domain construction rule:
+      </p>
+      <ul>
+        <li>the earlier R code used <code>st_buffer()</code> with round end caps,</li>
+        <li>the Julia code builds an explicit left/right ribbon polygon with flat ends,</li>
+        <li>the earlier R code also averaged the ordering coordinate instead of snapping it to the rounded grid.</li>
+      </ul>
+      <p>
+        Those differences changed the domain boundary enough to alter <code>surveygrid.csv</code> and to exclude
+        some GAP haul locations from <code>trawl_locations_projected.csv</code>.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Current Status</h2>
+      <ul>
+        <li><code>surveygrid.csv</code> now matches the Julia-era references in the parity report.</li>
+        <li><code>trawl_locations_projected.csv</code> now matches on row counts, schema, and operational coordinates.</li>
+        <li>The remaining trawl-location mismatch is in the exact string serialization of <code>lla</code> and <code>utm</code>, because R and Julia print those helper objects differently.</li>
+        <li><code>acoustics_projected.csv</code> still has partial parity for the checked surveys <code>200909</code>, <code>201207</code>, and <code>201807</code>, so preprocessing work is not finished.</li>
+      </ul>
+      <div class="callout">
+        <strong>Interpretation:</strong> the survey-domain logic is now much closer to the Julia implementation,
+        and the remaining preprocessing differences are narrower and easier to localize than before.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>How To Re-check</h2>
+      <ul>
+        <li>Run <code>Rscript tests/generate_r_julia_parity_report.R</code>.</li>
+        <li>Review <a href="./r-julia-parity.html">R and Julia parity evidence</a>.</li>
+        <li>Use <a href="./artifacts/r-julia-preprocess-details.csv">the preprocessing detail CSV</a> to see survey-by-survey results.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

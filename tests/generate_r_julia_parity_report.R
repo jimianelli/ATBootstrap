@@ -322,6 +322,55 @@ compare_preprocess_file <- function(survey, file_name, work_dir) {
   content_match <- FALSE
   max_numeric_diff <- NA_real_
 
+  if (identical(file_name, "trawl_locations_projected.csv") && schema_match && row_count_match) {
+    ref_sorted <- reference %>% arrange(haul_id)
+    cand_sorted <- candidate %>% arrange(haul_id)
+    same_identity <- identical(as.character(ref_sorted$survey), as.character(cand_sorted$survey)) &&
+      identical(ref_sorted$haul_id, cand_sorted$haul_id)
+    latlon_max_diff <- max(
+      abs(ref_sorted$latitude - cand_sorted$latitude),
+      abs(ref_sorted$longitude - cand_sorted$longitude),
+      na.rm = TRUE
+    )
+    xy_max_diff <- max(
+      abs(ref_sorted$x - cand_sorted$x),
+      abs(ref_sorted$y - cand_sorted$y),
+      na.rm = TRUE
+    )
+    helper_match <- identical(ref_sorted$lla, cand_sorted$lla) &&
+      identical(ref_sorted$utm, cand_sorted$utm)
+    core_match <- same_identity &&
+      is.finite(latlon_max_diff) &&
+      is.finite(xy_max_diff) &&
+      latlon_max_diff <= 1e-12 &&
+      xy_max_diff <= 1e-8
+
+    status <- if (core_match && helper_match) "PASS" else if (core_match) "PARTIAL" else "FAIL"
+    return(tibble(
+      suite = "preprocess_parity",
+      survey = survey,
+      file = file_name,
+      status = status,
+      row_count_reference = nrow(reference),
+      row_count_r = nrow(candidate),
+      col_count_reference = ncol(reference),
+      col_count_r = ncol(candidate),
+      schema_match = schema_match,
+      row_count_match = row_count_match,
+      content_match = helper_match,
+      missing_columns = "",
+      extra_columns = "",
+      max_numeric_diff = xy_max_diff,
+      note = if (status == "PASS") {
+        "Operational columns and helper strings match."
+      } else if (status == "PARTIAL") {
+        "Operational columns match within tolerance; only `lla`/`utm` helper-string serialization differs."
+      } else {
+        "Operational trawl-location columns still differ."
+      }
+    ))
+  }
+
   if (schema_match && row_count_match) {
     ref_char <- canonicalize_df(reference)
     cand_char <- canonicalize_df(candidate)
@@ -391,11 +440,12 @@ run_preprocess_parity <- function() {
     group_by(file) %>%
     summarise(
       pass_count = sum(status == "PASS"),
+      partial_count = sum(status == "PARTIAL"),
       fail_count = sum(status == "FAIL"),
       skipped_count = sum(status == "REFERENCE_MISSING"),
       status = case_when(
-        fail_count == 0 & skipped_count == 0 ~ "PASS",
-        pass_count > 0 & fail_count > 0 ~ "PARTIAL",
+        fail_count == 0 & partial_count == 0 & skipped_count == 0 ~ "PASS",
+        partial_count > 0 | (pass_count > 0 & fail_count > 0) ~ "PARTIAL",
         pass_count > 0 & fail_count == 0 ~ "PASS",
         fail_count > 0 & pass_count == 0 ~ "FAIL",
         TRUE ~ "SKIPPED"
@@ -406,20 +456,21 @@ run_preprocess_parity <- function() {
       suite = "preprocess_parity",
       check = paste("Preprocessing parity:", file),
       scope = "R preprocess_survey_data() against checked-in Julia-era surveydata outputs",
-      note = paste(pass_count, "passes,", fail_count, "fails,", skipped_count, "reference-missing.")
+      note = paste(pass_count, "passes,", partial_count, "partial,", fail_count, "fails,", skipped_count, "reference-missing.")
     ) %>%
     select(suite, check, status, pass_count, fail_count, skipped_count, scope, note)
 
   overall <- tibble(
     suite = "preprocess_parity",
     check = "Preprocessing parity overall",
-    status = if (all(detail$status == "PASS" | detail$status == "REFERENCE_MISSING")) "PASS" else "PARTIAL",
+    status = if (all(detail$status %in% c("PASS", "REFERENCE_MISSING"))) "PASS" else "PARTIAL",
     pass_count = sum(detail$status == "PASS"),
     fail_count = sum(detail$status == "FAIL"),
     skipped_count = sum(detail$status == "REFERENCE_MISSING"),
     scope = "Selected surveydata directories regenerated in R and compared to checked-in references",
     note = paste(
       sum(detail$status == "PASS"), "file-level passes,",
+      sum(detail$status == "PARTIAL"), "file-level partials,",
       sum(detail$status == "FAIL"), "file-level failures,",
       sum(detail$status == "REFERENCE_MISSING"), "reference-missing checks."
     )
@@ -475,16 +526,18 @@ preprocess_overview <- preprocess$detail %>%
   group_by(file) %>%
   summarise(
     pass = sum(status == "PASS"),
+    partial = sum(status == "PARTIAL"),
     fail = sum(status == "FAIL"),
     reference_missing = sum(status == "REFERENCE_MISSING"),
     .groups = "drop"
   ) %>%
   mutate(Status = case_when(
+    partial > 0 ~ "PARTIAL",
     fail == 0 ~ "PASS",
     pass > 0 ~ "PARTIAL",
     TRUE ~ "FAIL"
   )) %>%
-  select(`Preprocess output` = file, Status, pass, fail, reference_missing)
+  select(`Preprocess output` = file, Status, pass, partial, fail, reference_missing)
 
 detail_display <- preprocess$detail %>%
   transmute(
@@ -585,10 +638,10 @@ html <- paste0(
   "    </header>\n",
   "    <section class=\"section\">\n",
   "      <h2>Bottom Line</h2>\n",
-  "      <p>The repository now has a reproducible parity ledger, but it does not yet support a blanket claim that the R implementation fully matches Julia. The strongest current evidence is in frozen Julia outputs and several preprocessing products. The strongest current gaps are the survey grid and projected trawl-location products, plus the entire spatial/bootstrap layer.</p>\n",
+  "      <p>The repository now has a reproducible parity ledger, but it does not yet support a blanket claim that the R implementation fully matches Julia. The strongest current evidence is in frozen Julia outputs and most checked preprocessing products. The strongest remaining preprocessing gap is in a few <code>acoustics_projected.csv</code> cases, while projected trawl locations are now down to helper-string formatting differences.</p>\n",
   "      <div class=\"grid\">\n",
-  "        <div class=\"mini\"><strong>What passes</strong> Frozen Julia result hashes, the non-spatial R smoke test, and several preprocessing outputs including <code>scaling.csv</code> across all checked surveys.</div>\n",
-  "        <div class=\"mini\"><strong>What fails</strong> The current R preprocessing does not yet reproduce all checked Julia-era <code>surveygrid.csv</code> and <code>trawl_locations_projected.csv</code> files.</div>\n",
+  "        <div class=\"mini\"><strong>What passes</strong> Frozen Julia result hashes, the non-spatial R smoke test, and preprocessing outputs including <code>scaling.csv</code> and <code>surveygrid.csv</code> across all checked surveys.</div>\n",
+  "        <div class=\"mini\"><strong>What remains</strong> <code>acoustics_projected.csv</code> still has partial parity, and <code>trawl_locations_projected.csv</code> still differs in Julia-versus-R helper-string serialization for <code>lla</code> and <code>utm</code>.</div>\n",
   "        <div class=\"mini\"><strong>What is blocked</strong> Full end-to-end bootstrap parity remains out of scope until the spatial simulator question is resolved.</div>\n",
   "      </div>\n",
   "    </section>\n",

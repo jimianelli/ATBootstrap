@@ -1,10 +1,10 @@
 suite,check,status,pass_count,fail_count,skipped_count,scope,note
 golden_outputs,Frozen Julia output hashes,PASS,33,0,0,analyses/results against tests/golden/analyses_results,Matched 33 frozen Julia output files.
-preprocess_parity,Preprocessing parity overall,PARTIAL,15,19,6,Selected surveydata directories regenerated in R and compared to checked-in references,"15 file-level passes, 19 file-level failures, 6 reference-missing checks."
-preprocess_parity,Preprocessing parity: acoustics_projected.csv,PARTIAL,5,3,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"5 passes, 3 fails, 0 reference-missing."
-preprocess_parity,Preprocessing parity: length_weight.csv,PASS,2,0,6,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"2 passes, 0 fails, 6 reference-missing."
-preprocess_parity,Preprocessing parity: scaling.csv,PASS,8,0,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"8 passes, 0 fails, 0 reference-missing."
-preprocess_parity,Preprocessing parity: surveygrid.csv,FAIL,0,8,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"0 passes, 8 fails, 0 reference-missing."
-preprocess_parity,Preprocessing parity: trawl_locations_projected.csv,FAIL,0,8,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"0 passes, 8 fails, 0 reference-missing."
+preprocess_parity,Preprocessing parity overall,PARTIAL,23,3,6,Selected surveydata directories regenerated in R and compared to checked-in references,"23 file-level passes, 8 file-level partials, 3 file-level failures, 6 reference-missing checks."
+preprocess_parity,Preprocessing parity: acoustics_projected.csv,PARTIAL,5,3,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"5 passes, 0 partial, 3 fails, 0 reference-missing."
+preprocess_parity,Preprocessing parity: length_weight.csv,PASS,2,0,6,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"2 passes, 0 partial, 0 fails, 6 reference-missing."
+preprocess_parity,Preprocessing parity: scaling.csv,PASS,8,0,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"8 passes, 0 partial, 0 fails, 0 reference-missing."
+preprocess_parity,Preprocessing parity: surveygrid.csv,PASS,8,0,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"8 passes, 0 partial, 0 fails, 0 reference-missing."
+preprocess_parity,Preprocessing parity: trawl_locations_projected.csv,PARTIAL,0,0,0,R preprocess_survey_data() against checked-in Julia-era surveydata outputs,"0 passes, 8 partial, 0 fails, 0 reference-missing."
 nonspatial_smoke,R non-spatial deterministic smoke test,PASS,1,0,0,simulate_class_iteration() with an injected constant simulator,Generated 37 non-spatial result rows for survey 202207 .
 full_parity,Full R versus Julia bootstrap parity,BLOCKED,0,0,1,Whole-pipeline replicate and summary comparison,"Not yet claimable: the R port intentionally stops short of the spatial simulator, so direct end-to-end bootstrap parity cannot be demonstrated from this branch."
