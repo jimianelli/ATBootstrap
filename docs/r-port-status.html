@@ -24,6 +24,9 @@
   <ul>
     <li><code>tests/smoke_nonspatial_port.R</code> — passed.</li>
     <li><code>tests/smoke_spatial_port.R</code> — passed after preprocessing <code>surveydata/202207</code>.</li>
+    <li><code>tests/check_golden_results.R</code> — passed (33 files).</li>
+    <li><code>tests/compare_spatial_backends.R</code> — R metrics written; Julia probe failed (julia not on PATH).</li>
+    <li><code>tests/compare_spatial_conditionals.R</code> — R metrics written; Julia probe failed (julia not on PATH).</li>
   </ul>
 
   <h2>Commands</h2>
@@ -32,6 +35,12 @@
 Rscript -e "source('R/funs.R'); preprocess_survey_data('surveydata/202207', dx=10, ebs=TRUE, log_ranges=list(c(250,2190), c(2752.5,2778), c(2400,2752.49), c(2780,6100)), grid_method=TransectRibbons(width=40))"
 
 Rscript tests/smoke_spatial_port.R
+
+Rscript tests/check_golden_results.R
+
+Rscript tests/compare_spatial_backends.R
+
+Rscript tests/compare_spatial_conditionals.R
 </code></pre>
 
   <h2>Data Changes from Preprocessing</h2>
@@ -47,7 +56,7 @@ Rscript tests/smoke_spatial_port.R
   <h2>Notes</h2>
   <ul>
     <li>The spatial smoke test requires <code>length_weight.csv</code>, which is produced by <code>preprocess_survey_data</code>.</li>
-    <li>No Julia checks were run.</li>
+    <li>Julia probes failed because <code>julia</code> is not on PATH; only the R-side metrics were generated.</li>
   </ul>
 </body>
 </html>
