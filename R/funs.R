@@ -4,10 +4,13 @@ suppressPackageStartupMessages({
   library(dplyr)
   library(tidyr)
   library(ggplot2)
+  library(gstat)
   library(here)
   library(sf)
   library(FNN)
   library(purrr)
+  library(sp)
+  library(statmod)
   library(stringr)
   library(broom)
   library(concaveman)
@@ -157,15 +160,36 @@ ATBootstrapProblem <- function(surveydata = NULL,
                                age_max = 10,
                                aged_species = c(21740),
                                scaling_classes = NULL,
+                               cal_error = 0.1,
+                               zdist_candidates = c("gamma", "inverse_gamma", "inverse_gaussian", "lognormal"),
+                               maxlag = 200,
+                               nlags = 10,
+                               weightfunc = function(h) 1 / h,
+                               zdist_nreplicates = 12,
                                ...) {
   if (is.null(class_problems)) {
-    stop(
-      paste(
-        "Spatial setup is not ported to R in this repository.",
-        "Construct `class_problems` with an external spatial backend or continue using Julia for that layer."
-      ),
-      call. = FALSE
-    )
+    if (is.null(surveydata)) {
+      stop("`surveydata` is required when `class_problems` is not supplied.", call. = FALSE)
+    }
+    if (is.null(scaling_classes)) {
+      scaling_classes <- unique(surveydata$acoustics$class)
+    }
+
+    class_problems <- lapply(scaling_classes, function(class_name) {
+      message("Preparing ", class_name, "...")
+      .build_spatial_class_problem(
+        surveydata = surveydata,
+        class_name = class_name,
+        cal_error = cal_error,
+        age_max = age_max,
+        maxlag = maxlag,
+        nlags = nlags,
+        weightfunc = weightfunc,
+        zdist_candidates = zdist_candidates,
+        zdist_nreplicates = zdist_nreplicates,
+        aged_species = aged_species
+      )
+    })
   }
 
   if (is.null(scaling_classes)) {
@@ -610,7 +634,342 @@ merge_results <- function(results, results_step) {
     left_join(error_labels, by = "added_error")
 }
 
+.as_spatial_points <- function(df, value_col = NULL) {
+  cols <- unique(c("x", "y", value_col))
+  .require_columns(df, cols[!is.na(cols)], "spatial input")
+  pts <- df[, cols[!is.na(cols)], drop = FALSE]
+  sp::coordinates(pts) <- ~ x + y
+  pts
+}
+
+.cross_distance_matrix <- function(a, b) {
+  aa <- rowSums(a * a)
+  bb <- rowSums(b * b)
+  sqrt(pmax(outer(aa, bb, "+") - 2 * tcrossprod(a, b), 0))
+}
+
+.fit_exponential_variogram <- function(empirical, sill_guess, maxlag, weightfunc) {
+  positive_gamma <- empirical$gamma[is.finite(empirical$gamma) & empirical$gamma > 0]
+  gamma_scale <- if (length(positive_gamma) > 0) max(positive_gamma) else max(sill_guess, 1)
+  nugget_guess <- if (length(positive_gamma) > 0) min(positive_gamma) / 4 else max(sill_guess * 0.05, 1e-6)
+  range_guess <- max(maxlag / 3, 1e-3)
+
+  objective <- function(log_par) {
+    nugget <- exp(log_par[1])
+    psill <- exp(log_par[2])
+    range <- exp(log_par[3])
+    pred <- nugget + psill * (1 - exp(-empirical$dist / range))
+    weights <- weightfunc(pmax(empirical$dist, sqrt(.Machine$double.eps)))
+    weights[!is.finite(weights)] <- 0
+    sum(weights * (empirical$gamma - pred)^2, na.rm = TRUE)
+  }
+
+  fit <- optim(
+    par = log(c(max(nugget_guess, 1e-6), max(sill_guess, 1e-6), range_guess)),
+    fn = objective,
+    method = "L-BFGS-B",
+    lower = log(c(1e-8, 1e-8, max(maxlag / 100, 1e-3))),
+    upper = log(c(max(gamma_scale * 10, 1), max(gamma_scale * 10, 1), max(maxlag * 20, 1)))
+  )
+
+  list(
+    nugget = exp(fit$par[1]),
+    partial_sill = exp(fit$par[2]),
+    range = exp(fit$par[3]),
+    objective = fit$value,
+    convergence = fit$convergence
+  )
+}
+
+.variogram_gamma <- function(model, h) {
+  model$nugget + model$partial_sill * (1 - exp(-h / max(model$range, 1e-6)))
+}
+
+.covariance_from_variogram <- function(model, d, include_nugget = FALSE) {
+  cov <- model$partial_sill * exp(-d / max(model$range, 1e-6))
+  if (include_nugget) {
+    diag(cov) <- diag(cov) + model$nugget
+  }
+  cov
+}
+
+.chol_with_jitter <- function(mat, base_jitter = 1e-8, max_tries = 8L) {
+  jitter <- base_jitter
+  for (i in seq_len(max_tries)) {
+    attempt <- try(chol(mat + diag(jitter, nrow(mat))), silent = TRUE)
+    if (!inherits(attempt, "try-error")) {
+      return(t(attempt))
+    }
+    jitter <- jitter * 10
+  }
+  stop("Failed to factorize covariance matrix for the R spatial simulator.", call. = FALSE)
+}
+
+.normalize_probabilities <- function(x) {
+  total <- sum(x, na.rm = TRUE)
+  if (!is.finite(total) || total <= 0) {
+    rep(1 / length(x), length(x))
+  } else {
+    x / total
+  }
+}
+
+.kld_histogram <- function(observed, simulated, breaks) {
+  xmax <- max(c(observed, simulated), na.rm = TRUE)
+  if (xmax >= max(breaks)) {
+    breaks <- c(breaks, xmax * 1.001)
+  }
+  p <- .normalize_probabilities(hist(observed, breaks = breaks, plot = FALSE)$counts)
+  q <- .normalize_probabilities(hist(simulated, breaks = breaks, plot = FALSE)$counts)
+  keep <- p > 0
+  if (any(q[keep] <= 0)) {
+    return(Inf)
+  }
+  sum(p[keep] * log(p[keep] / q[keep]))
+}
+
+.standardize_zfamily <- function(family) {
+  family <- tolower(as.character(family)[1])
+  family <- gsub("[^a-z]", "_", family)
+  aliases <- c(
+    gamma = "gamma",
+    inverse_gamma = "inverse_gamma",
+    invgamma = "inverse_gamma",
+    inversegaussian = "inverse_gaussian",
+    inverse_gaussian = "inverse_gaussian",
+    invgaussian = "inverse_gaussian",
+    lognormal = "lognormal",
+    log_normal = "lognormal"
+  )
+  out <- aliases[[family]]
+  if (is.null(out)) {
+    stop("Unsupported z-distribution family: ", family, call. = FALSE)
+  }
+  out
+}
+
+.parameterize_marginal_family <- function(family, mean, variance) {
+  family <- .standardize_zfamily(family)
+  variance <- pmax(variance, 1e-8)
+  mean <- pmax(mean, .Machine$double.eps^(1 / 3))
+
+  if (family == "gamma") {
+    shape <- mean^2 / variance
+    scale <- variance / mean
+    return(structure(list(family = family, mean = mean, shape = shape, scale = scale), class = "ATBZDistVector"))
+  }
+  if (family == "inverse_gaussian") {
+    shape <- mean^3 / variance
+    return(structure(list(family = family, mean = mean, shape = shape), class = "ATBZDistVector"))
+  }
+  if (family == "inverse_gamma") {
+    shape <- mean^2 / variance + 2
+    scale <- mean * (shape - 1)
+    return(structure(list(family = family, mean = mean, shape = shape, scale = scale), class = "ATBZDistVector"))
+  }
+
+  sdlog <- sqrt(log1p(variance / mean^2))
+  meanlog <- log(mean) - sdlog^2 / 2
+  structure(list(family = family, mean = mean, meanlog = meanlog, sdlog = sdlog), class = "ATBZDistVector")
+}
+
+.quantile_zdist <- function(zdists, p) {
+  p <- pmin(pmax(p, 1e-8), 1 - 1e-8)
+  family <- .standardize_zfamily(zdists$family)
+
+  if (family == "gamma") {
+    return(qgamma(p, shape = zdists$shape, scale = zdists$scale))
+  }
+  if (family == "inverse_gaussian") {
+    return(statmod::qinvgauss(p, mean = zdists$mean, shape = zdists$shape))
+  }
+  if (family == "inverse_gamma") {
+    return(zdists$scale / qgamma(1 - p, shape = zdists$shape, scale = 1))
+  }
+  qlnorm(p, meanlog = zdists$meanlog, sdlog = zdists$sdlog)
+}
+
+.draw_zdist <- function(zdists) {
+  family <- .standardize_zfamily(zdists$family)
+
+  if (family == "gamma") {
+    return(rgamma(length(zdists$mean), shape = zdists$shape, scale = zdists$scale))
+  }
+  if (family == "inverse_gaussian") {
+    return(statmod::rinvgauss(length(zdists$mean), mean = zdists$mean, shape = zdists$shape))
+  }
+  if (family == "inverse_gamma") {
+    return(zdists$scale / rgamma(length(zdists$mean), shape = zdists$shape, scale = 1))
+  }
+  rlnorm(length(zdists$mean), meanlog = zdists$meanlog, sdlog = zdists$sdlog)
+}
+
+define_conditional_sim <- function(acoustics,
+                                   sim_domain,
+                                   maxlag = 200,
+                                   nlags = 10,
+                                   weightfunc = function(h) 1 / h) {
+  geonasc <- acoustics %>%
+    select(nasc, x, y) %>%
+    mutate(
+      x = x + 1e-3 * rnorm(n()),
+      y = y + 1e-3 * rnorm(n())
+    )
+
+  observed_sp <- .as_spatial_points(geonasc, "nasc")
+  empirical <- gstat::variogram(nasc ~ 1, observed_sp, cutoff = maxlag, width = maxlag / nlags)
+  fitted <- .fit_exponential_variogram(empirical, sill_guess = max(var(geonasc$nasc), 1e-6), maxlag = maxlag, weightfunc = weightfunc)
+
+  lag_grid <- seq(0, maxlag, length.out = 200)
+  variogram <- list(
+    empirical = tibble(lag = empirical$dist, gamma = empirical$gamma, np = empirical$np),
+    model = tibble(lag = lag_grid, gamma = .variogram_gamma(fitted, lag_grid)),
+    fit = fitted
+  )
+
+  domain <- if (inherits(sim_domain, "sf")) {
+    coords <- st_coordinates(sim_domain)
+    tibble(x = coords[, 1], y = coords[, 2])
+  } else if (is.data.frame(sim_domain)) {
+    sim_domain[, c("x", "y"), drop = FALSE]
+  } else if (is.matrix(sim_domain) && ncol(sim_domain) >= 2) {
+    tibble(x = sim_domain[, 1], y = sim_domain[, 2])
+  } else {
+    stop("Unsupported simulation domain representation.", call. = FALSE)
+  }
+
+  list(
+    variogram = variogram,
+    geoproblem = list(
+      observed = geonasc,
+      observed_sp = observed_sp,
+      domain = domain
+    )
+  )
+}
+
+get_lungs_params <- function(setup, theoretical_variogram, variable = "nasc") {
+  obs_xy <- as.matrix(setup$observed[, c("x", "y"), drop = FALSE])
+  sim_xy <- as.matrix(setup$domain[, c("x", "y"), drop = FALSE])
+  obs_vals <- setup$observed[[variable]]
+
+  obs_d <- as.matrix(dist(obs_xy))
+  sim_d <- as.matrix(dist(sim_xy))
+  cross_d <- .cross_distance_matrix(sim_xy, obs_xy)
+
+  sigma_oo <- .covariance_from_variogram(theoretical_variogram, obs_d, include_nugget = TRUE) +
+    diag(1e-6, nrow(obs_xy))
+  sigma_so <- .covariance_from_variogram(theoretical_variogram, cross_d, include_nugget = FALSE)
+  sigma_ss <- .covariance_from_variogram(theoretical_variogram, sim_d, include_nugget = TRUE) +
+    diag(1e-6, nrow(sim_xy))
+
+  mu <- mean(obs_vals, na.rm = TRUE)
+  centered_obs <- obs_vals - mu
+  solve_oo <- solve(sigma_oo)
+  mu_x <- as.vector(mu + sigma_so %*% (solve_oo %*% centered_obs))
+  cond_cov <- sigma_ss - sigma_so %*% solve_oo %*% t(sigma_so)
+  cond_cov <- (cond_cov + t(cond_cov)) / 2
+
+  list(
+    data = obs_vals,
+    dlocs = integer(0),
+    slocs = seq_len(nrow(sim_xy)),
+    mu = mu,
+    mu_x = mu_x,
+    sd_x = sqrt(pmax(diag(cond_cov), 1e-8)),
+    L = .chol_with_jitter(cond_cov)
+  )
+}
+
+parameterize_zdists <- function(Dist, lungs_params, eps = .Machine$double.eps^(1 / 3)) {
+  mu_x <- pmax(lungs_params$mu_x, eps)
+  target_mean <- mean(lungs_params$data, na.rm = TRUE)
+  if (!is.finite(target_mean) || target_mean <= 0) {
+    target_mean <- mean(mu_x, na.rm = TRUE)
+  }
+  mu_x <- mu_x * target_mean / mean(mu_x, na.rm = TRUE)
+  mu_z <- as.vector(forwardsolve(lungs_params$L, mu_x, upper.tri = FALSE, transpose = FALSE))
+  mu_z[mu_z <= eps] <- eps
+  .parameterize_marginal_family(Dist, mu_z, rep(1, length(mu_z)))
+}
+
+choose_z_distribution <- function(candidate_dists,
+                                  nasc,
+                                  lungs_params,
+                                  nreplicates = 12,
+                                  verbose = FALSE) {
+  candidate_dists <- unique(vapply(candidate_dists, .standardize_zfamily, character(1)))
+  breaks <- c(0, 2^(0:14))
+  fits <- lapply(candidate_dists, function(family) {
+    if (verbose) {
+      message("Comparing with ", family, "...")
+    }
+    zd <- parameterize_zdists(family, lungs_params)
+    tibble(
+      distribution = family,
+      kld = replicate(nreplicates, .kld_histogram(nasc, nonneg_lusim(lungs_params, zd), breaks))
+    )
+  })
+
+  bind_rows(fits) %>%
+    filter(is.finite(kld)) %>%
+    group_by(distribution) %>%
+    summarise(mean_kld = mean(kld), .groups = "drop") %>%
+    arrange(mean_kld) %>%
+    slice(1) %>%
+    pull(distribution) %>%
+    { if (length(.) == 0) candidate_dists[[1]] else . }
+}
+
+.build_spatial_class_problem <- function(surveydata,
+                                         class_name,
+                                         cal_error = 0.1,
+                                         age_max = 10,
+                                         maxlag = 200,
+                                         nlags = 10,
+                                         weightfunc = function(h) 1 / h,
+                                         zdist_candidates = c("gamma", "inverse_gamma", "inverse_gaussian", "lognormal"),
+                                         zdist_nreplicates = 12,
+                                         aged_species = c(21740)) {
+  acoustics_sub <- surveydata$acoustics %>% filter(class == class_name)
+  if (nrow(acoustics_sub) == 0) {
+    stop("No acoustic observations found for class `", class_name, "`.", call. = FALSE)
+  }
+
+  spatial_setup <- define_conditional_sim(
+    acoustics = acoustics_sub,
+    sim_domain = surveydata$grid,
+    maxlag = maxlag,
+    nlags = nlags,
+    weightfunc = weightfunc
+  )
+  params <- get_lungs_params(spatial_setup$geoproblem, spatial_setup$variogram$fit)
+  optimal_dist <- choose_z_distribution(
+    candidate_dists = zdist_candidates,
+    nasc = acoustics_sub$nasc,
+    lungs_params = params,
+    nreplicates = zdist_nreplicates
+  )
+  zd <- parameterize_zdists(optimal_dist, params)
+
+  ScalingClassProblem(
+    class_name = class_name,
+    variogram = spatial_setup$variogram,
+    geosetup = spatial_setup$geoproblem,
+    params = params,
+    zfamily = optimal_dist,
+    zdists = zd,
+    cal_error = cal_error,
+    age_max = age_max,
+    aged_species = aged_species,
+    simdomain = surveydata$grid
+  )
+}
+
 .zdist_mean <- function(z) {
+  if (inherits(z, "ATBZDistVector")) {
+    return(z$mean)
+  }
   if (is.numeric(z) && length(z) == 1L) {
     z
   } else if (is.list(z) && !is.null(z$mean)) {
@@ -632,10 +991,13 @@ nonneg_lumult <- function(params, z) {
   x <- numeric(npts)
   x[params$slocs] <- as.vector(params$L %*% z)
   x[params$dlocs] <- params$data
-  x
+  pmax(x, 0)
 }
 
 nonneg_lusim <- function(params, zdists) {
+  if (inherits(zdists, "ATBZDistVector")) {
+    return(nonneg_lumult(params, .draw_zdist(zdists)))
+  }
   z <- vapply(zdists, function(zdist) {
     if (is.function(zdist)) {
       zdist()
@@ -834,7 +1196,7 @@ simulate_class_iteration <- function(scp, surveydata, bs = BootSpecs(), i = 1) {
     if (is.null(scp$zdists) || is.null(scp$params)) {
       stop("Deterministic spatial path requires `params` and `zdists` on the class problem.", call. = FALSE)
     }
-    z0 <- vapply(scp$zdists, .zdist_mean, numeric(1))
+    z0 <- .zdist_mean(scp$zdists)
     nonneg_lumult(scp$params, z0)
   }
 

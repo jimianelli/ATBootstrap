@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap Spatial LU Port Notes</title>
+  <style>
+    :root {
+      --bg: #f5f1e8;
+      --panel: #fffdf8;
+      --ink: #1f2933;
+      --muted: #5b6670;
+      --accent: #0f766e;
+      --accent-soft: #d9f0ed;
+      --warn: #8a5a00;
+      --warn-soft: #fff2cc;
+      --fail: #9f1d1d;
+      --fail-soft: #fde8e8;
+      --border: #d7d0c2;
+      --code-bg: #f2eee6;
+      --shadow: 0 18px 40px rgba(31, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      background:
+        radial-gradient(circle at top left, rgba(15, 118, 110, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(138, 90, 0, 0.10), transparent 24%),
+        linear-gradient(180deg, #f8f5ee 0%, var(--bg) 100%);
+      color: var(--ink);
+      line-height: 1.62;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(15, 118, 110, 0.96), rgba(24, 62, 92, 0.92));
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      opacity: 0.85;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 3.3rem);
+      line-height: 1.05;
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 54rem;
+      font-size: 1.06rem;
+      color: rgba(248, 250, 252, 0.9);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+      font-size: 0.92rem;
+    }
+
+    .meta span,
+    .meta a {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+      text-decoration: none;
+    }
+
+    .section {
+      margin-top: 22px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 24px 26px;
+      box-shadow: var(--shadow);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.5rem;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 0 0 12px 22px;
+      padding: 0;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .mini {
+      border-radius: 16px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(15, 118, 110, 0.16);
+      padding: 14px 16px;
+    }
+
+    .mini strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    .callout {
+      border-left: 6px solid var(--warn);
+      background: var(--warn-soft);
+      padding: 16px 18px;
+      border-radius: 14px;
+      margin-top: 14px;
+    }
+
+    .callout.fail {
+      border-left-color: var(--fail);
+      background: var(--fail-soft);
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+
+    th,
+    td {
+      border-top: 1px solid var(--border);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+
+    .badge.partial {
+      background: #fef0c7;
+      color: #854d0e;
+    }
+
+    .badge.fail {
+      background: #fee4e2;
+      color: #b42318;
+    }
+
+    a {
+      color: #0f5f9c;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Spatial Port Notes</p>
+      <h1>R LU Simulator Port</h1>
+      <p class="subtitle">
+        Notes on the March 17, 2026 follow-up work that replaced the earlier copula-based
+        R spatial approximation with a direct LU-style conditional simulator and then
+        compared that backend against the original Julia implementation.
+      </p>
+      <div class="meta">
+        <span>Status: implemented in R</span>
+        <span>Survey compared: 202207</span>
+        <a href="./artifacts/spatial_backend_parity.csv">Parity CSV</a>
+        <a href="./artifacts/spatial_backend_r.csv">R metrics CSV</a>
+        <a href="./artifacts/spatial_backend_julia.csv">Julia metrics CSV</a>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>What Changed</h2>
+      <p>
+        The R backend in <code>R/funs.R</code> no longer uses the Gaussian-copula field
+        approximation that was added during the first spatial port pass. It now follows the
+        same broad structure as <code>src/spatial.jl</code>:
+      </p>
+      <ul>
+        <li>fit the empirical exponential variogram,</li>
+        <li>build the conditional covariance of simulation locations,</li>
+        <li>factor that covariance into a lower-triangular matrix <code>L</code>,</li>
+        <li>solve <code>L \ mu_x</code> in R before parameterizing the nonnegative marginals,</li>
+        <li>simulate fields with <code>L %*% z</code> through <code>nonneg_lumult()</code>.</li>
+      </ul>
+      <div class="grid">
+        <div class="mini">
+          <strong>Old path</strong>
+          Correlation-Cholesky plus copula quantiles. This got means and variograms into the
+          right range but selected the wrong marginal family for some classes.
+        </div>
+        <div class="mini">
+          <strong>New path</strong>
+          Direct LU-style simulator in R with the same parameter flow used by Julia:
+          <code>mu_x</code>, <code>L</code>, and nonnegative <code>z</code> draws.
+        </div>
+        <div class="mini">
+          <strong>Immediate effect</strong>
+          The R backend now matches Julia’s chosen <code>zdist</code> family for all three
+          tested 202207 classes.
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Implementation Notes</h2>
+      <p>
+        The key R-side steps now live in <code>R/funs.R</code>:
+      </p>
+      <ul>
+        <li><code>get_lungs_params()</code> stores the full conditional factor <code>L</code>.</li>
+        <li><code>parameterize_zdists()</code> computes <code>mu_z</code> with <code>forwardsolve()</code>.</li>
+        <li><code>nonneg_lusim()</code> feeds marginal draws into <code>nonneg_lumult()</code>.</li>
+        <li><code>simulate_class_iteration()</code> now uses that deterministic field when
+          <code>simulate_nasc = FALSE</code>.</li>
+      </ul>
+      <p>
+        Because the current R implementation constructs a plain conditional covariance and then
+        clips negative outputs to zero, it is still not identical to Julia’s internal
+        <code>GeoStatsProcesses.LUMethod()</code> behavior. That difference matters most for field spread.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Comparison Harness</h2>
+      <p>
+        Three comparison scripts were added so the backend can be checked repeatedly instead of by
+        inspection:
+      </p>
+      <ul>
+        <li><code>tests/spatial_backend_probe.R</code> records R class-level spatial diagnostics.</li>
+        <li><code>tests/spatial_backend_probe.jl</code> records the same diagnostics from Julia.</li>
+        <li><code>tests/compare_spatial_backends.R</code> joins both outputs and writes a parity table.</li>
+      </ul>
+      <p>
+        The wrapper command used for the latest run was:
+        <code>ATB_SPATIAL_NSIM=10 Rscript tests/compare_spatial_backends.R</code>
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>Current Results</h2>
+      <p>
+        The latest comparison is based on survey <code>202207</code> and the three operational
+        classes <code>SS1</code>, <code>SS2</code>, and <code>BT</code>.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>R zdist</th>
+            <th>Julia zdist</th>
+            <th>Status</th>
+            <th>Main remaining gap</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SS1</td>
+            <td><code>inverse_gaussian</code></td>
+            <td><code>Distributions.InverseGaussian</code></td>
+            <td><span class="badge partial">PARTIAL</span></td>
+            <td>Deterministic field SD still differs by about 25%.</td>
+          </tr>
+          <tr>
+            <td>SS2</td>
+            <td><code>gamma</code></td>
+            <td><code>Distributions.Gamma</code></td>
+            <td><span class="badge fail">DIVERGENT</span></td>
+            <td>Field spread remains materially off even though means and variogram shape are closer.</td>
+          </tr>
+          <tr>
+            <td>BT</td>
+            <td><code>inverse_gaussian</code></td>
+            <td><code>Distributions.InverseGaussian</code></td>
+            <td><span class="badge fail">DIVERGENT</span></td>
+            <td>Spread and simulated-class totals remain too far from Julia.</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>Key improvement:</strong> the LU-style port fixed the previous mismatch in
+        marginal-family selection. The remaining work is now more clearly about reproducing Julia’s
+        field-spread behavior, not about whether R can support inverse Gaussian or the LU flow.
+      </div>
+      <div class="callout fail">
+        <strong>Current limit:</strong> this is still not sufficient to claim backend equivalence.
+        The parity CSV shows that <code>SS2</code> and <code>BT</code> remain outside a reasonable
+        tolerance because the R field variance is still too different.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Next Step</h2>
+      <p>
+        The most defensible next pass is to target the spread gap, starting with <code>SS2</code>.
+        That likely means reproducing more of Julia’s exact conditional-simulation preprocessing,
+        rather than just matching the mathematical outline of <code>L %*% z</code>.
+      </p>
+      <ul>
+        <li>Inspect how Julia’s <code>randprep(..., LUMethod(), ...)</code> encodes the conditional problem.</li>
+        <li>Check whether the R path is missing a mean-centering or variance-normalization step before factorization.</li>
+        <li>Compare intermediate objects class-by-class, not only final bootstrap totals.</li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>
