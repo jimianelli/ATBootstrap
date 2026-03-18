@@ -21,6 +21,10 @@ fetches from Macebase here as .csv files.
 * `quarto` : Quarto notebooks showing formatted analysis results. Currently only contains
 one notebook for the 2022 summer survey.
 
+## Documentation
+
+- R port status (local): `docs/r-port-status.html`
+- R port status (published): https://jimianelli.github.io/ATBootstrap/r-port-status.html
 
 ## Setup
 
