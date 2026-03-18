@@ -20,3 +20,7 @@ docs/site/
 # Figures and output files
 *.png
 .Rproj.user
+
+# Python artifacts
+__pycache__/
+*.pyc

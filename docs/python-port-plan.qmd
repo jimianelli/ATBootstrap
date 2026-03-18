@@ -1,0 +1,65 @@
+---
+title: "ATBootstrap Python Port Plan"
+format:
+  html:
+    toc: true
+---
+
+## Purpose
+
+Document the plan for translating the Julia implementation in `src/` to a Python
+package while preserving analysis outputs and survey bootstrap behavior.
+
+## Guiding principles
+
+- **Parity first:** Match Julia outputs before refactoring Python for style.
+- **Incremental modules:** Port module-by-module with tests and small fixtures.
+- **Traceable artifacts:** Keep intermediate CSVs that allow exact comparisons.
+
+## File-by-file plan
+
+1. **Core types and constants**
+   - Julia: `src/types.jl`
+   - Python: `python/atbootstrap/types.py`
+
+2. **Preprocessing**
+   - Julia: `src/preprocess_survey_data.jl`
+   - Python: `python/atbootstrap/preprocess.py`
+   - Parity checks: row counts, key fields, derived columns, and `surveydata` outputs.
+
+3. **Calibration and selectivity**
+   - Julia: `src/calibration.jl`, `src/mace_selectivity.jl`
+   - Python: `python/atbootstrap/calibration.py`, `python/atbootstrap/selectivity.py`
+   - Parity checks: point estimates and uncertainty summaries.
+
+4. **Length–weight and age–length**
+   - Julia: `src/mace_length_weight.jl`, `src/mace_age_length.jl`
+   - Python: `python/atbootstrap/length_weight.py`, `python/atbootstrap/age_length.py`
+   - Parity checks: fitted coefficients, residual diagnostics.
+
+5. **Spatial components**
+   - Julia: `src/spatial.jl`, `src/nearbottom.jl`, `src/scaling.jl`
+   - Python: `python/atbootstrap/spatial.py`, `python/atbootstrap/nearbottom.py`, `python/atbootstrap/scaling.py`
+   - Parity checks: spatial index values, variance decomposition.
+
+6. **Time series summaries**
+   - Julia: `src/mace_ts.jl`
+   - Python: `python/atbootstrap/mace_ts.py`
+   - Parity checks: trend outputs, bootstrap CI bands.
+
+7. **Display/plotting**
+   - Julia: `src/display.jl`
+   - Python: `python/atbootstrap/display.py`
+   - Parity checks: figure content and axis scales (not pixel-perfect).
+
+## Testing and parity
+
+- Add Python unit tests mirroring Julia functions with shared fixtures.
+- Use small survey slices from `surveydata/` for deterministic test cases.
+- Compare key numeric outputs to within tolerance.
+
+## Deliverables
+
+- `python/atbootstrap/` package structure with module stubs and docstrings.
+- Minimal test suite validating parity for at least one survey year.
+- A short migration note describing any unavoidable differences.

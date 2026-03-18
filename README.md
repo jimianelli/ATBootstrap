@@ -25,6 +25,7 @@ one notebook for the 2022 summer survey.
 
 - R port status (local): `docs/r-port-status.html`
 - R port status (published): https://jimianelli.github.io/ATBootstrap/r-port-status.html
+- Python port plan (local): `docs/python-port-plan.qmd`
 
 ## Notes
 
