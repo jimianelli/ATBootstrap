@@ -1,0 +1,25 @@
+---
+title: "Python parity evaluation 202207"
+format:
+  html:
+    toc: false
+---
+
+## Summary
+
+- Python replicates: 100
+- Python cache: `analyses/results/results_python_202207.csv`
+- Julia baseline: `analyses/results/results_202207.csv`
+- Mean absolute percent diff (n): 10488.47%
+- Mean absolute percent diff (biomass): 11067.17%
+
+## Mean-by-age comparison (species 21740)
+
+```{r}
+library(tidyverse)
+library(gt)
+
+merged <- read_csv("docs/artifacts/python_parity_202207.csv", show_col_types = FALSE)
+merged %>%
+  gt()
+```

@@ -97,19 +97,23 @@ def get_lungs_params(setup: dict, theoretical_variogram: dict, variable: str = "
     Cdd_inv = np.linalg.pinv(Cdd)
     mu_x = mu + Csd @ Cdd_inv @ zc
     Ccond = Css - Csd @ Cdd_inv @ Csd.T
+    # symmetrize for numerical stability
+    Ccond = 0.5 * (Ccond + Ccond.T)
+
     # jitter for numerical stability
     jitter = 1e-10
-    for _ in range(10):
+    for _ in range(6):
         try:
             L = np.linalg.cholesky(Ccond + np.eye(Ccond.shape[0]) * jitter)
             break
         except np.linalg.LinAlgError:
             jitter *= 10
     else:
-        # final fallback: shift by absolute min eigenvalue
-        eigmin = np.min(np.linalg.eigvalsh(Ccond))
-        shift = abs(eigmin) + 1e-6
-        L = np.linalg.cholesky(Ccond + np.eye(Ccond.shape[0]) * shift)
+        # eigenvalue clip fallback
+        evals, evecs = np.linalg.eigh(Ccond)
+        evals = np.clip(evals, 1e-6, None)
+        Ccond_pd = (evecs * evals) @ evecs.T
+        L = np.linalg.cholesky(Ccond_pd)
 
     return {
         "data": z,

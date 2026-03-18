@@ -63,7 +63,7 @@ def main():
         surveydata, scaling_classes=scaling_classes
     )
 
-    nreplicates = 500
+    nreplicates = 100
     results_py = simulate(atbp, surveydata, nreplicates=nreplicates)
 
     # cache python results for comparison
@@ -133,7 +133,14 @@ format:
 
 ## Mean-by-age comparison (species 21740)
 
-{merged.to_markdown(index=False)}
+```{{r}}
+library(tidyverse)
+library(gt)
+
+merged <- read_csv("docs/artifacts/python_parity_{survey}.csv", show_col_types = FALSE)
+merged %>%
+  gt()
+```
 """
 
     (repo_root / "docs" / "python-parity.qmd").write_text(qmd)
