@@ -12,4 +12,5 @@ format:
 - Spatial LU port notes: `spatial-lu-port.html`
 - Spatial conditional alignment: `spatial-conditional-alignment.html`
 - Python port plan: `python-port-plan.qmd`
-- Python parity evaluation: `python-parity.html`
+- Python parity evaluation (HTML): `python-parity.html`
+- Python parity evaluation (QMD): `python-parity.qmd`

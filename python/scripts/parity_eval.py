@@ -59,13 +59,16 @@ def main():
         dA=dA,
     )
 
-    # Keep zdist selection simple for a fast parity pass
     atbp = make_atbootstrap_problem(
-        surveydata, scaling_classes=scaling_classes, zdist_candidates=["Gamma"]
+        surveydata, scaling_classes=scaling_classes
     )
 
-    nreplicates = 10
+    nreplicates = 500
     results_py = simulate(atbp, surveydata, nreplicates=nreplicates)
+
+    # cache python results for comparison
+    py_cache = results_dir / f"results_python_{survey}.csv"
+    results_py.to_csv(py_cache, index=False)
 
     # Julia results baseline
     results_jl = pd.read_csv(results_dir / f"results_{survey}.csv")
@@ -101,6 +104,7 @@ def main():
 <p>Comparison of Python vs Julia bootstrap mean-by-age for species 21740.</p>
 <ul>
   <li>Python replicates: {nreplicates}</li>
+  <li>Python cache: analyses/results/results_python_{survey}.csv</li>
   <li>Julia baseline: analyses/results/results_{survey}.csv</li>
   <li>Mean absolute percent diff (n): {n_mape:.2f}%</li>
   <li>Mean absolute percent diff (biomass): {b_mape:.2f}%</li>
@@ -112,12 +116,34 @@ def main():
 
     (repo_root / "docs" / "python-parity.html").write_text(html)
 
+    qmd = f"""---
+title: \"Python parity evaluation {survey}\"
+format:
+  html:
+    toc: false
+---
+
+## Summary
+
+- Python replicates: {nreplicates}
+- Python cache: `analyses/results/results_python_{survey}.csv`
+- Julia baseline: `analyses/results/results_{survey}.csv`
+- Mean absolute percent diff (n): {n_mape:.2f}%
+- Mean absolute percent diff (biomass): {b_mape:.2f}%
+
+## Mean-by-age comparison (species 21740)
+
+{merged.to_markdown(index=False)}
+"""
+
+    (repo_root / "docs" / "python-parity.qmd").write_text(qmd)
+
     meta = {
         "survey": survey,
         "nreplicates": nreplicates,
         "n_mape": n_mape,
         "biomass_mape": b_mape,
-        "note": "Python run uses Gamma-only z-dist for speed; results are indicative, not final parity.",
+        "note": "Full z-dist selection enabled.",
     }
     (out_dir / f"python_parity_{survey}.json").write_text(json.dumps(meta, indent=2))
 
