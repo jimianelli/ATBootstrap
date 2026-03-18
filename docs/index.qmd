@@ -1,0 +1,15 @@
+---
+title: "ATBootstrap Docs"
+format:
+  html:
+    toc: false
+---
+
+## Project documentation
+
+- R port status: `r-port-status.html`
+- R-Julia parity: `r-julia-parity.html`
+- Spatial LU port notes: `spatial-lu-port.html`
+- Spatial conditional alignment: `spatial-conditional-alignment.html`
+- Python port plan: `python-port-plan.qmd`
+- Python parity evaluation: `python-parity.html`

@@ -98,8 +98,15 @@ def get_lungs_params(setup: dict, theoretical_variogram: dict, variable: str = "
     mu_x = mu + Csd @ Cdd_inv @ zc
     Ccond = Css - Csd @ Cdd_inv @ Csd.T
     # jitter for numerical stability
-    Ccond = Ccond + np.eye(Ccond.shape[0]) * 1e-10
-    L = np.linalg.cholesky(Ccond)
+    jitter = 1e-10
+    for _ in range(6):
+        try:
+            L = np.linalg.cholesky(Ccond + np.eye(Ccond.shape[0]) * jitter)
+            break
+        except np.linalg.LinAlgError:
+            jitter *= 10
+    else:
+        raise np.linalg.LinAlgError("Conditional covariance not positive definite")
 
     return {
         "data": z,

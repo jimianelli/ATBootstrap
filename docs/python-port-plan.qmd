@@ -58,7 +58,7 @@ package while preserving analysis outputs and survey bootstrap behavior.
 - Use small survey slices from `surveydata/` for deterministic test cases.
 - Compare key numeric outputs to within tolerance.
 
-**Parity evaluation status:** Not yet run. When completed, results will be summarized in a generated HTML report and linked from the docs index.
+**Parity evaluation status:** A first-pass parity run has been completed. See `docs/python-parity.html` for the HTML summary (Gamma-only z-dist for speed).
 
 ## Deliverables
 

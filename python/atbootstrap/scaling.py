@@ -15,11 +15,14 @@ def resample_df(df: pd.DataFrame, stochastic: bool = True) -> pd.DataFrame:
 
 
 def resample_scaling(df: pd.DataFrame, stochastic: bool = True) -> pd.DataFrame:
-    return (
-        df.groupby(["haul_id", "class"], as_index=False, group_keys=False)
+    res = (
+        df.groupby(["haul_id", "class"], group_keys=True)
         .apply(lambda x: resample_df(x, stochastic))
-        .reset_index(drop=True)
+        .reset_index()
     )
+    if "level_2" in res.columns:
+        res = res.drop(columns=["level_2"])
+    return res
 
 
 def _category(use_ages, species_code, age):

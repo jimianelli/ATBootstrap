@@ -1,0 +1,7 @@
+{
+  "survey": "202207",
+  "nreplicates": 10,
+  "n_mape": 10.325347993945503,
+  "biomass_mape": 9.794035319165111,
+  "note": "Python run uses Gamma-only z-dist for speed; results are indicative, not final parity."
+}
