@@ -58,6 +58,8 @@ package while preserving analysis outputs and survey bootstrap behavior.
 - Use small survey slices from `surveydata/` for deterministic test cases.
 - Compare key numeric outputs to within tolerance.
 
+**Parity evaluation status:** Not yet run. When completed, results will be summarized in a generated HTML report and linked from the docs index.
+
 ## Deliverables
 
 - `python/atbootstrap/` package structure with module stubs and docstrings.
