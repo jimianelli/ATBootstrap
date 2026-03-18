@@ -715,7 +715,11 @@ merge_results <- function(results, results_step) {
 }
 
 .kld_histogram <- function(observed, simulated, breaks) {
+  xmin <- min(c(observed, simulated), na.rm = TRUE)
   xmax <- max(c(observed, simulated), na.rm = TRUE)
+  if (xmin < min(breaks)) {
+    breaks <- c(xmin * 1.001, breaks)
+  }
   if (xmax >= max(breaks)) {
     breaks <- c(breaks, xmax * 1.001)
   }
@@ -853,29 +857,55 @@ get_lungs_params <- function(setup, theoretical_variogram, variable = "nasc") {
   sim_xy <- as.matrix(setup$domain[, c("x", "y"), drop = FALSE])
   obs_vals <- setup$observed[[variable]]
 
-  obs_d <- as.matrix(dist(obs_xy))
-  sim_d <- as.matrix(dist(sim_xy))
-  cross_d <- .cross_distance_matrix(sim_xy, obs_xy)
+  nn_idx <- max.col(-.cross_distance_matrix(obs_xy, sim_xy), ties.method = "first")
+  buff <- numeric(nrow(sim_xy))
+  mask <- rep(FALSE, nrow(sim_xy))
+  for (i in seq_along(nn_idx)) {
+    if (!is.na(obs_vals[[i]])) {
+      buff[[nn_idx[[i]]]] <- obs_vals[[i]]
+      mask[[nn_idx[[i]]]] <- TRUE
+    }
+  }
 
-  sigma_oo <- .covariance_from_variogram(theoretical_variogram, obs_d, include_nugget = TRUE) +
-    diag(1e-6, nrow(obs_xy))
-  sigma_so <- .covariance_from_variogram(theoretical_variogram, cross_d, include_nugget = FALSE)
-  sigma_ss <- .covariance_from_variogram(theoretical_variogram, sim_d, include_nugget = TRUE) +
-    diag(1e-6, nrow(sim_xy))
+  dlocs <- which(mask)
+  slocs <- which(!mask)
+  mu <- 0
 
-  mu <- mean(obs_vals, na.rm = TRUE)
-  centered_obs <- obs_vals - mu
-  solve_oo <- solve(sigma_oo)
-  mu_x <- as.vector(mu + sigma_so %*% (solve_oo %*% centered_obs))
-  cond_cov <- sigma_ss - sigma_so %*% solve_oo %*% t(sigma_so)
+  if (length(dlocs) == 0L) {
+    sim_d <- as.matrix(dist(sim_xy))
+    c22 <- .covariance_from_variogram(theoretical_variogram, sim_d, include_nugget = TRUE)
+    return(list(
+      data = numeric(0),
+      dlocs = integer(0),
+      slocs = seq_len(nrow(sim_xy)),
+      mu = mu,
+      mu_x = rep(0, nrow(sim_xy)),
+      sd_x = sqrt(pmax(diag(c22), 1e-8)),
+      L = .chol_with_jitter(c22)
+    ))
+  }
+
+  d_xy <- sim_xy[dlocs, , drop = FALSE]
+  s_xy <- sim_xy[slocs, , drop = FALSE]
+
+  c11 <- .covariance_from_variogram(theoretical_variogram, as.matrix(dist(d_xy)), include_nugget = TRUE)
+  c22 <- .covariance_from_variogram(theoretical_variogram, as.matrix(dist(s_xy)), include_nugget = TRUE)
+  c12 <- .covariance_from_variogram(theoretical_variogram, .cross_distance_matrix(d_xy, s_xy), include_nugget = FALSE)
+
+  l11 <- .chol_with_jitter(c11)
+  b12 <- forwardsolve(l11, c12, upper.tri = FALSE, transpose = FALSE)
+  a21 <- t(b12)
+  z1 <- buff[dlocs]
+  d2 <- as.vector(a21 %*% forwardsolve(l11, z1, upper.tri = FALSE, transpose = FALSE))
+  cond_cov <- c22 - a21 %*% b12
   cond_cov <- (cond_cov + t(cond_cov)) / 2
 
   list(
-    data = obs_vals,
-    dlocs = integer(0),
-    slocs = seq_len(nrow(sim_xy)),
+    data = z1,
+    dlocs = dlocs,
+    slocs = slocs,
     mu = mu,
-    mu_x = mu_x,
+    mu_x = d2,
     sd_x = sqrt(pmax(diag(cond_cov), 1e-8)),
     L = .chol_with_jitter(cond_cov)
   )
@@ -991,7 +1021,7 @@ nonneg_lumult <- function(params, z) {
   x <- numeric(npts)
   x[params$slocs] <- as.vector(params$L %*% z)
   x[params$dlocs] <- params$data
-  pmax(x, 0)
+  x
 }
 
 nonneg_lusim <- function(params, zdists) {

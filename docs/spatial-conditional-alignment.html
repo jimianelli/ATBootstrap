@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATBootstrap Spatial Conditional Alignment</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --panel: #fffdf8;
+      --ink: #1f2933;
+      --muted: #5b6670;
+      --accent: #0f5f9c;
+      --accent-soft: #e4eef8;
+      --ok: #0f766e;
+      --ok-soft: #d9f0ed;
+      --warn: #8a5a00;
+      --warn-soft: #fff1cc;
+      --line: #d7d0c2;
+      --code: #f2eee6;
+      --shadow: 0 18px 40px rgba(31, 41, 51, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Georgia, "Times New Roman", serif;
+      color: var(--ink);
+      line-height: 1.62;
+      background:
+        radial-gradient(circle at top left, rgba(15, 95, 156, 0.10), transparent 28%),
+        linear-gradient(180deg, #faf7f0 0%, var(--bg) 100%);
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 40px 24px 72px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, rgba(17, 77, 93, 0.96), rgba(15, 95, 156, 0.94));
+      color: #f8fafc;
+      border-radius: 24px;
+      padding: 36px 32px;
+      box-shadow: var(--shadow);
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-size: 0.8rem;
+      opacity: 0.85;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(2rem, 4vw, 3.1rem);
+      line-height: 1.05;
+    }
+
+    .subtitle {
+      margin: 0;
+      max-width: 56rem;
+      font-size: 1.05rem;
+      color: rgba(248, 250, 252, 0.9);
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 18px;
+      font-size: 0.92rem;
+    }
+
+    .meta span,
+    .meta a {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc;
+      text-decoration: none;
+    }
+
+    .section {
+      margin-top: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 24px 26px;
+      box-shadow: var(--shadow);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 1.5rem;
+      line-height: 1.2;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 0 0 12px 22px;
+      padding: 0;
+    }
+
+    li + li {
+      margin-top: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.95rem;
+    }
+
+    th,
+    td {
+      border-top: 1px solid var(--line);
+      padding: 10px 8px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .callout {
+      border-left: 6px solid var(--ok);
+      background: var(--ok-soft);
+      padding: 16px 18px;
+      border-radius: 14px;
+      margin-top: 14px;
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    code {
+      font-family: "SFMono-Regular", Menlo, Consolas, monospace;
+      font-size: 0.92em;
+      background: var(--code);
+      padding: 0.15em 0.4em;
+      border-radius: 6px;
+    }
+
+    a {
+      color: var(--accent);
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <p class="eyebrow">Spatial Follow-up</p>
+      <h1>Conditional Encoding Alignment</h1>
+      <p class="subtitle">
+        Notes on the March 17, 2026 follow-up that rewired the R spatial simulator to encode
+        the same conditional problem as Julia’s <code>randprep(..., LUMethod(), ...)</code>,
+        then compared intermediate objects class by class instead of looking only at final
+        bootstrap totals.
+      </p>
+      <div class="meta">
+        <span>Status: structural parity fixed</span>
+        <span>Survey compared: 202207</span>
+        <a href="./artifacts/spatial_conditional_parity.csv">Conditional parity CSV</a>
+        <a href="./artifacts/spatial_backend_parity.csv">Backend parity CSV</a>
+      </div>
+    </header>
+
+    <section class="section">
+      <h2>What Julia Actually Encodes</h2>
+      <p>
+        The important detail in Julia was not an extra normalization before factorization.
+        The important detail was the conditional problem itself. Julia maps observed NASC
+        values to the nearest survey grid cells, marks those cells as hard data, and only
+        factorizes the covariance of the remaining simulation cells.
+      </p>
+      <ul>
+        <li><code>dlocs</code>: domain cells populated by the nearest observed NASC values</li>
+        <li><code>slocs</code>: all remaining grid cells</li>
+        <li><code>z1</code>: the hard-data values already written into domain order</li>
+        <li><code>d2</code>: the Schur-complement conditional shift used when solving for <code>mu_z</code></li>
+        <li><code>L22</code>: the Cholesky factor of the covariance among <code>slocs</code> only</li>
+      </ul>
+      <p>
+        The R path had been doing something else: treating the entire grid as simulated,
+        storing <code>dlocs = integer(0)</code>, and building a full-field kriging-style
+        conditional mean from <code>obs - mean(obs)</code>.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2>R Changes</h2>
+      <p>
+        <code>get_lungs_params()</code> in <code>R/funs.R</code> now mirrors the Julia
+        setup more closely:
+      </p>
+      <ul>
+        <li>nearest-domain assignment is done observation by observation, with later collisions overwriting earlier values just as Julia’s <code>NearestInit()</code> does,</li>
+        <li><code>dlocs</code> and <code>slocs</code> are formed from the domain mask instead of assuming the full grid is simulated,</li>
+        <li><code>data</code> now stores the masked domain values, not the raw observation vector,</li>
+        <li><code>mu</code> is zero, matching the default Julia Gaussian process mean,</li>
+        <li><code>mu_x</code> now stores the conditional shift term over <code>slocs</code>, not a full-grid kriging mean,</li>
+        <li><code>nonneg_lumult()</code> now follows Julia and inserts hard data without an extra <code>pmax()</code> clamp.</li>
+      </ul>
+    </section>
+
+    <section class="section">
+      <h2>Intermediate-Object Parity</h2>
+      <p>
+        The new probes record conditional objects from both backends:
+        <a href="./artifacts/spatial_conditional_r.csv">R conditional metrics</a> and
+        <a href="./artifacts/spatial_conditional_julia.csv">Julia conditional metrics</a>.
+        After the alignment change, all three classes match structurally.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>R dlocs</th>
+            <th>Julia dlocs</th>
+            <th>R slocs</th>
+            <th>Julia slocs</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SS1</td>
+            <td>548</td>
+            <td>548</td>
+            <td>3125</td>
+            <td>3125</td>
+            <td>NUMERIC_ONLY</td>
+          </tr>
+          <tr>
+            <td>SS2</td>
+            <td>548</td>
+            <td>548</td>
+            <td>3125</td>
+            <td>3125</td>
+            <td>NUMERIC_ONLY</td>
+          </tr>
+          <tr>
+            <td>BT</td>
+            <td>548</td>
+            <td>548</td>
+            <td>3125</td>
+            <td>3125</td>
+            <td>NUMERIC_ONLY</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        The structural mismatch is gone. The remaining differences are now numerical and
+        downstream, which is the right place for the next round of parity work.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Current Backend Consequences</h2>
+      <p>
+        Refreshing the full backend comparison after the conditional fix did not make the
+        whole pipeline equivalent yet. Current results from
+        <a href="./artifacts/spatial_backend_parity.csv">spatial_backend_parity.csv</a>:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Class</th>
+            <th>R zdist</th>
+            <th>Julia zdist</th>
+            <th>Main gap</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>SS1</td>
+            <td>lognormal</td>
+            <td>InverseGaussian</td>
+            <td>z-family differs, but deterministic field moments are now very close</td>
+            <td>DIFF_ZDIST</td>
+          </tr>
+          <tr>
+            <td>SS2</td>
+            <td>gamma</td>
+            <td>Gamma</td>
+            <td>field spread still diverges materially</td>
+            <td>DIVERGENT</td>
+          </tr>
+          <tr>
+            <td>BT</td>
+            <td>inverse_gamma</td>
+            <td>InverseGaussian</td>
+            <td>z-family differs, with moderate simulation-spread drift remaining</td>
+            <td>DIFF_ZDIST</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        The conditional problem is now encoded correctly in R, but the z-family selection
+        and some simulation-spread behavior still do not match Julia end to end.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Reproduction</h2>
+      <ul>
+        <li><code>Rscript tests/smoke_nonspatial_port.R</code></li>
+        <li><code>Rscript tests/smoke_spatial_port.R</code></li>
+        <li><code>Rscript tests/compare_spatial_conditionals.R</code></li>
+        <li><code>ATB_SPATIAL_NSIM=10 Rscript tests/compare_spatial_backends.R</code></li>
+      </ul>
+    </section>
+  </div>
+</body>
+</html>

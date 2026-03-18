@@ -23,7 +23,7 @@ cp <- atbp$class_problems[[1]]
 sim <- simulate_nasc(cp)
 stopifnot(length(sim) == nrow(sfiles$surveygrid))
 stopifnot(all(is.finite(sim)))
-stopifnot(all(sim >= 0))
+stopifnot(identical(unname(sim[cp$params$dlocs]), unname(cp$params$data)))
 
 common_bs <- BootSpecs(
   selectivity = FALSE,

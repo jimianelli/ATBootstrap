@@ -214,8 +214,24 @@
         <a href="./artifacts/spatial_backend_parity.csv">Parity CSV</a>
         <a href="./artifacts/spatial_backend_r.csv">R metrics CSV</a>
         <a href="./artifacts/spatial_backend_julia.csv">Julia metrics CSV</a>
+        <a href="./spatial-conditional-alignment.html">Conditional follow-up</a>
       </div>
     </header>
+
+    <section class="section">
+      <h2>Later Follow-up</h2>
+      <p>
+        This page captures the first LU-style R port. A later follow-up inspected Julia’s
+        <code>randprep(..., LUMethod(), ...)</code> setup directly, rewired the R backend to
+        match the same masked-domain conditional structure, and added intermediate-object
+        probes for <code>dlocs</code>, <code>slocs</code>, conditional shifts, and factor
+        summaries.
+      </p>
+      <p>
+        See <a href="./spatial-conditional-alignment.html">Spatial Conditional Alignment</a>
+        for that second pass and the refreshed parity boundary.
+      </p>
+    </section>
 
     <section class="section">
       <h2>What Changed</h2>
